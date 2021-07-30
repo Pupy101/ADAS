@@ -1,9 +1,10 @@
 import torch
-import u2net_blocks as blocks
-import utils
 
 from torch import nn
 from torch.nn import functional as F
+
+from .u2net_blocks import blocks
+from .utils import functions as utils
 
 
 class U2Net(nn.Module):
@@ -14,7 +15,7 @@ class U2Net(nn.Module):
     This NN equal U2Net from paper, but I drop one block in center of net - En_6.
     """
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
 
         # encoder

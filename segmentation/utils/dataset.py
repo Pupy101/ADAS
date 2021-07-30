@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 
 
 class BDD100K(Dataset):
-    def __init__(self, image_dir, mask_dir, transforms=None, check=False):
+    def __init__(self, image_dir: str, mask_dir: str, transforms=None, check=False):
         self.images, self.masks = BDD100K.__load_image(image_dir, mask_dir)
         self.transforms = transforms
         if check:
@@ -37,8 +37,8 @@ class BDD100K(Dataset):
 
         image_path = self.images[ind]
         mask_path = self.masks[ind]
-        img = cv2.imread(image_path)
-        msk = cv2.imread(mask_path)
+        img = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+        msk = cv2.cvtColor(cv2.imread(mask_path), cv2.COLOR_BGR2RGB)
 
         data = {'image': img, 'mask': msk}
 
