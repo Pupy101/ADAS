@@ -4,3 +4,4 @@ torchvision==0.9.0+cu111
 torchaudio==0.8.0
 albumentations==1.0.3
 cv2==4.5.3
+tqdm=4.41.1

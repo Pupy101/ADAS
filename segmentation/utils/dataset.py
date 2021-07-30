@@ -1,56 +1,92 @@
 import pathlib
 
 import cv2
+import numpy as np
+import albumentations as A
 
+from tqdm import tqdm
 from torch.utils.data import Dataset
+from albumentations.pytorch import ToTensorV2
 
 
 class BDD100K(Dataset):
-    def __init__(self, image_dir: str, mask_dir: str, transforms=None, check=False):
-        self.images, self.masks = BDD100K.__load_image(image_dir, mask_dir)
+    def __init__(
+        self,
+        image_dir: str,
+        mask_dir: str,
+        ext_images: str = 'jpg',
+        prefix_with_ext_mask:str = '_drivable_color.png',
+        transforms=None,
+        check: bool=False
+        ):
+        self.image_dir = pathlib.Path(image_dir)
+        self.mask_dir = pathlib.Path(mask_dir)
+        self.ext_images = ext_images
+        self.prefix = prefix_with_ext_mask
+        self.images = sorted(self.image_dir.rglob(f'*/*.{self.ext_images}'))
         self.transforms = transforms
         if check:
             self._check()
 
-    @staticmethod
-    def _load_image(image_dir, mask_dir):
-        image_dir = pathlib.Path(image_dir)
-        mask_dir = pathlib.Path(mask_dir)
-        images = sorted(image_dir.rglob('*/*.jpg'))
-        masks = sorted(mask_dir.rglob('*/*.png'))
-        return images, masks
+    def load_image_and_mask(self, image_path, mask_path):
+        img = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
+        msk = cv2.cvtColor(cv2.imread(str(mask_path)), cv2.COLOR_BGR2RGB)
+        return img, msk, mask_path
 
     def _check(self):
         bad_images = []
-        bad_masks = []
-        for image, mask in zip(self.images, self.masks):
-            img = cv2.imread(image)
-            msk = cv2.imread(mask)
-            if img.shape[2] != 3 or msk.shape[2] != 3:
-                bad_images.append(image)
-                bad_masks.append(mask)
-        for bad_image, bad_mask in zip(bad_images, bad_masks):
+        self.masks = []
+        for image_path in tqdm(self.images):
+            mask_path = self.mask_dir / f'{image_path.stem}{self.prefix}'
+            if mask_path.exists():
+                self.masks.append(mask_path)
+            else:
+                bad_image.append(image_path)
+        for bad_image in bad_images:
             self.images.remove(bad_image)
-            self.masks.remove(bad_mask)
 
     def __getitem__(self, ind):
 
         image_path = self.images[ind]
         mask_path = self.masks[ind]
-        img = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
-        msk = cv2.cvtColor(cv2.imread(mask_path), cv2.COLOR_BGR2RGB)
+        img, msk, _ = self.load_image_and_mask(image_path, mask_path)
 
         data = {'image': img, 'mask': msk}
 
         if self.transforms:
             data = self.transforms(**data)
             img, msk = data['image'], data['mask']
-
-        msk = msk.squeeze(0).permute(2, 0, 1)
+        msk = np.transpose(msk, (2, 0, 1))
         msk[1] = -(msk[0] + msk[2] - 1)
         return {'features': img, 'targets': msk}
 
     def __len__(self):
         return len(self.images)
+
+
+train_transform = A.Compose(
+    [
+        A.Flip(),
+        A.Resize(256, 256, p=1),
+        A.Cutout(),
+        A.RandomBrightnessContrast(
+            brightness_limit=0.2,
+            contrast_limit=0.2,
+            p=0.3
+        ),
+        A.GridDistortion(p=0.3),
+        A.HueSaturationValue(p=0.3),
+        A.Normalize(),
+        ToTensorV2()        
+    ]
+)
+
+valid_transforms = A.Compose(
+    [
+        A.Resize(256, 256, p=1),
+        A.Normalize(),
+        ToTensorV2()
+    ]
+)
 
 
