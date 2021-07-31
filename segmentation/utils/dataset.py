@@ -41,7 +41,7 @@ class BDD100K(Dataset):
             if mask_path.exists():
                 self.masks.append(mask_path)
             else:
-                bad_image.append(image_path)
+                bad_images.append(image_path)
         for bad_image in bad_images:
             self.images.remove(bad_image)
 
@@ -68,7 +68,7 @@ train_transform = A.Compose(
     [
         A.Flip(),
         A.Resize(256, 256, p=1),
-        A.Cutout(),
+        A.CoarseDropout(),
         A.RandomBrightnessContrast(
             brightness_limit=0.2,
             contrast_limit=0.2,
