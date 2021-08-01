@@ -23,7 +23,7 @@ class BDD100K(Dataset):
         self.mask_dir = pathlib.Path(mask_dir)
         self.ext_images = ext_images
         self.prefix = prefix_with_ext_mask
-        self.images = sorted(self.image_dir.rglob(f'*/*.{self.ext_images}'))
+        self.images = sorted(self.image_dir.rglob(f'*.{self.ext_images}'))
         self.transforms = transforms
         if check:
             self._check()
