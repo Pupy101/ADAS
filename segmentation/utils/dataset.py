@@ -10,14 +10,18 @@ from albumentations.pytorch import ToTensorV2
 
 
 class BDD100K(Dataset):
+    """
+    Dataset for train segmentation net based on BD100K https://bair.berkeley.edu/blog/2018/05/30/bdd/'
+    ----------------------------------------
+    """
     def __init__(
         self,
         image_dir: str,
         mask_dir: str,
         ext_images: str = 'jpg',
-        prefix_with_ext_mask:str = '_drivable_color.png',
+        prefix_with_ext_mask: str = '_drivable_color.png',
         transforms=None,
-        check: bool=False
+        check: bool = False
         ):
         self.image_dir = pathlib.Path(image_dir)
         self.mask_dir = pathlib.Path(mask_dir)
@@ -46,7 +50,6 @@ class BDD100K(Dataset):
             self.images.remove(bad_image)
 
     def __getitem__(self, ind):
-
         image_path = self.images[ind]
         mask_path = self.masks[ind]
         img, msk, _ = self.load_image_and_mask(image_path, mask_path)
@@ -64,6 +67,7 @@ class BDD100K(Dataset):
         return len(self.images)
 
 
+# transforms for train stage net
 train_transform = A.Compose(
     [
         A.Flip(),
@@ -77,10 +81,11 @@ train_transform = A.Compose(
         A.GridDistortion(p=0.3),
         A.HueSaturationValue(p=0.3),
         A.Normalize(),
-        ToTensorV2()        
+        ToTensorV2()
     ]
 )
 
+# transforms for validation and inference stages net
 valid_transforms = A.Compose(
     [
         A.Resize(256, 256, p=1),
@@ -88,5 +93,3 @@ valid_transforms = A.Compose(
         ToTensorV2()
     ]
 )
-
-
