@@ -44,12 +44,12 @@ class config:
     # dir for datasets
     dir_for_train = {
         'train': {
-            'image': '/content/bdd100k/images/100k/train',
-            'mask': '/content/bdd100k/drivable_maps/color_labels/train'
+            'image': './datasets/bdd100k/images/100k/train',
+            'mask': './datasets/bdd100k/drivable_maps/color_labels/train'
         },
         'valid': {
-            'image': '/content/bdd100k/images/100k/val',
-            'mask': '/content/bdd100k/drivable_maps/color_labels/val'
+            'image': './datasets/bdd100k/images/100k/val',
+            'mask': './datasets/bdd100k/drivable_maps/color_labels/val'
         }
     }
     dir_for_inference = '/content/bdd100k/images/100k/val'
@@ -66,7 +66,7 @@ class config:
                 'url': 'https://drive.google.com/uc?id=1lgSGH_ifIzTSn9aeeQ1f0wYA42ctR9hB'
             }
         ]
-        dir_for_save_datasets = './datatsets'
+        dir_for_save_datasets = './datasets'
         # training datasets
         dataset = {
             'train': BDD100K(

@@ -22,7 +22,7 @@ def train_segmentation(config):
             shuffle=True
         ),
         'valid': DataLoader(
-            config.datasets['valid'],
+            config.dataset['valid'],
             batch_size=config.batch_valid,
             num_workers=config.num_workers
         )
@@ -48,12 +48,14 @@ def train_segmentation(config):
         )
     runner = dl.SupervisedRunner()
     runner.train(
+        num_epochs=config.n_epochs,
         model=model,
         loaders=loaders,
         criterion=criterion,
         optimizer=optimizer,
         scheduler=scheduler,
         callbacks=config.callbacks,
+        seed=config.seed,
         logdir=config.logdir,
         valid_loader=config.valid_loader,
         valid_metric=config.valid_metric,
