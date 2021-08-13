@@ -1,7 +1,10 @@
+import torch
+
 from typing import Union, Tuple
 
 from torch import Tensor
 from torch.nn import functional as F
+from numpy import ndarray
 
 
 def upsample(image: Tensor, shape: Union[Tuple, Tensor]) -> Tensor:
@@ -42,3 +45,15 @@ def upsample_like(image: Tensor, example: Tensor):
     """
     shape = example.shape[-2:]
     return upsample(image, shape)
+
+
+
+def transform_tensor_to_numpy(batch: Tensor) -> ndarray:
+    """
+    Function changing input tensor batch in numpy array with round to 0 or 1
+    ----------------------------------------------
+    Example:
+        transform_tensor_to_numpy(torch.ones(1, 3))
+    """
+    assert len(batch.shape) == 4, 'Input batch must have 4 dimensions [B, C, H, W]'
+    return torch.round(batch.permute(0, 2, 3, 1)).detach().cpu().numpy()

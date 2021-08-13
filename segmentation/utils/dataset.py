@@ -67,6 +67,26 @@ class BDD100K(Dataset):
         return len(self.images)
 
 
+# Dataset for inference segmentation net
+class InferenceDataset(Dataset):
+    def __init__(self, dir_images, transforms):
+        self.dir_images = pathlib.Path(dir_images)
+        self.transforms = transforms
+        self.files = []
+        for ext in ['*.png', '*.jpg', '*.jpeg']:
+            self.files.extend(self.dir_images.rglob(ext))
+    
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, ind):
+        image_path = self.dir_images / self.files[ind]
+        image = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
+        if self.transforms:
+            image = self.transforms(image=image)['image']
+        return {'features': image}
+
+
 # transforms for train stage net
 train_transform = A.Compose(
     [

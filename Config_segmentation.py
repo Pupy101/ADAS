@@ -4,7 +4,7 @@ from torch import nn, optim, Tensor
 from catalyst import dl
 from catalyst.contrib import nn as catalyst_nn
 
-from segmentation import U2Net, BDD100K, train_transform, valid_transforms
+from segmentation import U2Net, BDD100K, InferenceDataset, train_transform, valid_transforms
 
 
 class SegmentationLoss(nn.Module):
@@ -25,21 +25,43 @@ class SegmentationLoss(nn.Module):
 
 
 class config:
+
+    checkpoint = None # or path to model
     model = U2Net(3, 3)
-    dataset = {
-        'train': BDD100K(
-            '/content/bdd100k/images/100k/train',
-            '/content/bdd100k/drivable_maps/color_labels/train',
-            check=True,
-            transforms=train_transform
-        ),
-        'valid': BDD100K(
-            '/content/bdd100k/images/100k/val',
-            '/content/bdd100k/drivable_maps/color_labels/val',
-            check=True,
-            transforms=valid_transforms
-        )
+    # if True - dataset for train if False model in inference mode
+    train = True
+    dir_for_train = {
+        'train': {
+            'image': '/content/bdd100k/images/100k/train',
+            'mask': '/content/bdd100k/drivable_maps/color_labels/train'
+        },
+        'valid': {
+            'image': '/content/bdd100k/images/100k/val',
+            'mask': '/content/bdd100k/drivable_maps/color_labels/val'
+        }
     }
+    dir_for_inference = '/content/bdd100k/images/100k/val'
+    if train:
+        dataset = {
+            'train': BDD100K(
+                dir_for_train['train']['image'],
+                dir_for_train['train']['mask'],
+                check=True,
+                transforms=train_transform
+            ),
+            'valid': BDD100K(
+                dir_for_train['valid']['image'],
+                dir_for_train['valid']['mask'],
+                check=True,
+                transforms=valid_transforms
+            )
+        }
+    else:
+        dataset = {
+            'valid': InferenceDataset(dir_for_inference, transforms=valid_transforms)
+        }
+        dir_for_save = './targets'
+
     # Dataloader parameters
     batch_train = 16
     batch_valid = 64
