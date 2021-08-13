@@ -4,7 +4,7 @@ from typing import Dict, Union
 
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
-from catalyst import dl
+from catalyst import dl, utils
 
 
 def train_segmentation(config):
@@ -16,7 +16,7 @@ def train_segmentation(config):
     """
     loaders = {
         'train': DataLoader(
-            config.datasets['train'],
+            config.dataset['train'],
             batch_size=config.batch_train,
             num_workers=config.num_workers,
             shuffle=True
@@ -37,7 +37,15 @@ def train_segmentation(config):
         **config.sheduler_params,
         steps_per_epoch=len(loaders['train']) + 5
     )
-
+    if config.checkpoint_path:
+        checkpoint = utils.load_checkpoint(config.checkpoint_path)
+        utils.unpack_checkpoint(
+            checkpoint=checkpoint,
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            scheduler=scheduler
+        )
     runner = dl.SupervisedRunner()
     runner.train(
         model=model,

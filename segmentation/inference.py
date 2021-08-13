@@ -34,10 +34,10 @@ def inference_segmentation(config):
     criterion = config.criterion
     optimizer = config.optimizer(model.parameters(), lr=config.LR)
     # load weights
-    if config.checkpoint:
-        checkpoint = utils.load_checkpoint(config.checkpoint)
-        optimizer = config.optimizer(config.model.parameters(), lr=config.LR)
+    if config.checkpoint_path:
+        checkpoint = utils.load_checkpoint(config.checkpoint_path)
         utils.unpack_checkpoint(
+            checkpoint=checkpoint,
             model=config.model,
             criterion=criterion,
             optimizer=optimizer
