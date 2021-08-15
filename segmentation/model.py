@@ -139,4 +139,4 @@ class U2Net(nn.Module):
                 )
             )
         )
-        return [F.sigmoid(x) for x in result_encoder]
+        return [torch.sigmoid(x) for x in result_encoder]
