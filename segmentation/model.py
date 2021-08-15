@@ -14,7 +14,7 @@ class U2Net(nn.Module):
     Number of class can be changed by parametr \'out_channels\'.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, is_big_net=True):
+    def __init__(self, in_channels: int, out_channels: int, is_big_net: bool = True):
         super().__init__()
         if is_big_net:
             configuration = [
@@ -38,10 +38,10 @@ class U2Net(nn.Module):
                 [64, 16, 64],
                 [64, 16, 64],
                 [64, 16, 64],
-                [128, 16, 64]
-                [128, 16, 64]
-                [128, 16, 64]
-                [128, 16, 64]
+                [128, 16, 64],
+                [128, 16, 64],
+                [128, 16, 64],
+                [128, 16, 64],
                 [128, 16, 64]
             ]
 
