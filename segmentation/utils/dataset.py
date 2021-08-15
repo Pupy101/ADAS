@@ -91,7 +91,7 @@ class InferenceDataset(Dataset):
 train_transform = A.Compose(
     [
         A.Flip(),
-        A.Resize(256, 256, p=1),
+        A.Resize(300, 300, p=1),
         A.CoarseDropout(),
         A.RandomBrightnessContrast(
             brightness_limit=0.2,
@@ -108,7 +108,7 @@ train_transform = A.Compose(
 # transforms for validation and inference stages net
 valid_transforms = A.Compose(
     [
-        A.Resize(256, 256, p=1),
+        A.Resize(300, 300, p=1),
         A.Normalize(),
         ToTensorV2()
     ]
