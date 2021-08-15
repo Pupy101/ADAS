@@ -100,7 +100,7 @@ class config:
 
     # Training parameters
     n_epochs = 10
-    criterion = SegmentationLoss(base_loss=catalyst_nn.FocalTrevskyLoss(alpha=0.7)
+    criterion = SegmentationLoss(base_loss=catalyst_nn.FocalTrevskyLoss(alpha=0.7))
     LR = 3e-4
     optimizer = optim.AdamW
     sheduler_params = {
