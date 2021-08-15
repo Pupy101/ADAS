@@ -5,8 +5,8 @@ import torch
 
 from os.path import join as path_join
 
-from tqdm import tqdm
 from catalyst import dl, utils
+from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from .utils.functions import transform_tensor_to_numpy
@@ -56,7 +56,7 @@ def inference_segmentation(config):
     )
     os.makedirs(config.dir_for_save, exist_ok=True)
     for i, data in enumerate(dataloader):
-        output = runner.predict_batch(data)
+        output = F.sigmoid(runner.predict_batch(data)[6])
         images = transform_tensor_to_numpy(output)
         for j in images.shape[0]:
             img = images[j]

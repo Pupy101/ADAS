@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import List
 
 from torch import nn, optim, Tensor
 from catalyst import dl
@@ -10,18 +10,18 @@ from segmentation import U2Net, BDD100K, InferenceDataset, train_transform, vali
 class SegmentationLoss(nn.Module):
     def __init__(
         self,
-        loss1: nn.Module = catalyst_nn.DiceLoss(),
-        loss2: nn.Module = catalyst_nn.TrevskyLoss(alpha=0.7),
-        koeff: Union[List, Tensor] = [0.45, 0.55]
+        base_loss: nn.Module = catalyst_nn.DiceLoss(),
+        n_outputs: int = 7
     ):
         super().__init__()
-        self.loss1 = loss1
-        self.loss2 = loss2
-        assert isinstance(koeff, (list, tuple)) and len(koeff) == 2
-        self.koeff = koeff
+        self.loss = base_loss
+        self._n_outputs = n_outputs
 
-    def forward(self, inputs, targets):
-        return self.koeff[0]*self.loss1(inputs, targets) + self.koeff[1]*self.loss2(inputs, targets)
+    def forward(self, inputs: List[Tensor], targets: Tensor):
+        overall_loss = self.loss(inputs[0], targets)
+        for i in range(1, self._n_outputs):
+            overall_loss = self.loss(inputs[i], targets)
+        return overall_loss
 
 
 class config:
