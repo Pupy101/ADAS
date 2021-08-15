@@ -38,7 +38,7 @@ class ConvBNReLU(nn.Module):
         return x
 
 
-class UpsampleConvSigmoid(nn.Module):
+class UpsampleConv(nn.Module):
     """
     Unit with structure: Upsample to needed shape + Conv2d + Sigmoid
     """
@@ -56,12 +56,10 @@ class UpsampleConvSigmoid(nn.Module):
             kernel_size=kernel_size,
             padding=padding
         )
-        self.fn_activation = nn.Sigmoid()
 
     def forward(self, x, shape):
         x = upsample(x, shape)
         x = self.convolution(x)
-        x = self.fn_activation(x)
         return x
 
 
@@ -81,76 +79,79 @@ class RSUOneDilation(nn.Module):
         depth: int = 7
     ):
         super().__init__()
-        assert len(channels) == 4, 'Length list of channels must be equal 4'
+        assert len(channels) == 3, 'Length list of channels must be equal 3'
         assert depth >= 3, 'Depth of RSU unit must be bigger or equal 3'
         self._depth = depth
+        # encoder part
         self.down_stage = nn.ModuleList(
             [
-                ConvBNReLU(channels[0], channels[1], kernel_size, padding),
-                ConvBNReLU(channels[1], channels[2], kernel_size, padding),
+                ConvBNReLU(channels[0], channels[2], kernel_size, padding),
+                ConvBNReLU(channels[2], channels[1], kernel_size, padding),
                 *[
-                    ConvBNReLU(channels[2], channels[2], kernel_size, padding)
+                    ConvBNReLU(channels[1], channels[1], kernel_size, padding)
                     for _ in range(depth - 2)
                 ]
 
             ]
         )
-        self.dilation_stage = ConvBNReLU(channels[2], channels[2], kernel_size, padding_dilation, dilation=dilation)
+        # dilation part
+        self.dilation_stage = ConvBNReLU(channels[1], channels[1], kernel_size, padding_dilation, dilation=dilation)
+        # decoder part
         self.up_stage = nn.ModuleList(
             [
                 *[
-                    ConvBNReLU(channels[2] * 2, channels[2], kernel_size, padding)
+                    ConvBNReLU(channels[1] * 2, channels[1], kernel_size, padding)
                     for _ in range(depth - 2)
                 ],
-                ConvBNReLU(channels[2] * 2, channels[3], kernel_size, padding)
+                ConvBNReLU(channels[1] * 2, channels[2], kernel_size, padding)
             ]
         )
 
     def forward(self, input_tensor):
         output_down_stage = []
-        output_up_stage = []        
         # downsampling part
-        # stage1_down  -  index 0
-        output_down_stage.append(self.down_stage[0](input_tensor))
-        # stage2_down  -  index 1
-        output_down_stage.append(self.down_stage[1](output_down_stage[0]))
-        for i in range(self._depth - 2):
+        output_down_stage.append(
+            self.down_stage[0](input_tensor)
+        )
+        x = output_down_stage[0]
+        for i in range(1, self._depth - 1):
             output_down_stage.append(
-                self.down_stage[i+2](
-                    F.max_pool2d(
-                        output_down_stage[i+1],
-                        kernel_size=2,
-                        stride=2
-                    )
-                )
+                self.down_stage[i](x)
             )
+            x = F.max_pool2d(
+                output_down_stage[i],
+                kernel_size=2,
+                stride=2
+            )
+        output_down_stage.append(
+            self.down_stage[-1](x)
+        )
         # dilation part
         output_dilation_stage = self.dilation_stage(output_down_stage[-1])
         # upsample part
-        output_up_stage.append(
-            self.up_stage[0](
+
+        output_up = self.up_stage[0](
+            torch.cat(
+                (output_dilation_stage, output_down_stage[-1]),
+                dim=1
+            )
+        )
+        output_up = upsample_like(output_up, output_down_stage[-2])
+        for i in range(1, self._depth - 2):
+            output_up = self.up_stage[i](
                 torch.cat(
-                    (output_dilation_stage, output_down_stage[-1]),
+                    (output_up, output_down_stage[-i-1]),
                     dim=1
                 )
             )
-        )
-        for i in range(self._depth - 2):
-            output_up_stage.append(
-                self.up_stage[i+1](
-                    torch.cat(
-                        (
-                            upsample_like(
-                                output_up_stage[0],
-                                output_down_stage[self._depth-2-i]
-                            ),
-                            output_down_stage[self._depth-2-i]
-                        ),
-                        dim=1
-                    )
-                )
+            output_up = upsample_like(output_up, output_down_stage[-i-2])
+        output_up = self.up_stage[-1](
+            torch.cat(
+                (output_up, output_down_stage[1]),
+                dim=1
             )
-        return output_up_stage[-1] + output_down_stage[0]
+        )
+        return output_up + output_down_stage[0]
 
 
 class RSU4FiveDilation(nn.Module):
@@ -164,41 +165,34 @@ class RSU4FiveDilation(nn.Module):
         channels: List,
         kernel_size: int = 3,
         padding: int = 1,
-        padding_dilation: List = [2, 4, 8, 4, 2],
-        dilation: List = [2, 4, 8, 4, 2]
     ):
         super().__init__()
 
-        assert len(channels) == 4, 'Length list of channels must be equal 4'
-        assert len(padding_dilation) == len(dilation) and len(dilation) == 5, 'Lenght padding_dilation must be equal dilation'
+        assert len(channels) == 3, 'Length list of channels must be equal 3'
 
         self.down_stage = nn.ModuleList(
             [
-                ConvBNReLU(channels[0], channels[1], kernel_size, padding),
-                ConvBNReLU(channels[1], channels[2], kernel_size, padding),
-                ConvBNReLU(channels[2], channels[2], kernel_size,
-                           padding=padding_dilation[0], dilation=dilation[0]),
-                ConvBNReLU(channels[2], channels[2], kernel_size,
-                           padding=padding_dilation[1], dilation=dilation[1])
+                ConvBNReLU(channels[0], channels[2], kernel_size),
+                ConvBNReLU(channels[2], channels[1], kernel_size, dilation=1, padding=1),
+                ConvBNReLU(channels[1], channels[1], kernel_size, dilation=2, padding=2),
+                ConvBNReLU(channels[1], channels[1], kernel_size, dilation=4, padding=4)                
             ]
         )
-        self.dilation_stage = ConvBNReLU(channels[2], channels[2], kernel_size,
-                                         padding=padding_dilation[2], dilation=dilation[2])
+        self.dilation_stage = ConvBNReLU(channels[1], channels[1], kernel_size, dilation=8, padding=8)
         self.up_stage = nn.ModuleList(
             [
-                ConvBNReLU(channels[2] * 2, channels[2], kernel_size,
-                           padding=padding_dilation[3], dilation=dilation[3]),
-                ConvBNReLU(channels[2] * 2, channels[2], kernel_size,
-                           padding=padding_dilation[4], dilation=dilation[4]),
-                ConvBNReLU(channels[2] * 2, channels[3], kernel_size, padding)
+                ConvBNReLU(channels[1] * 2, channels[1], kernel_size, dilation=4, padding=4),
+                ConvBNReLU(channels[1] * 2, channels[1], kernel_size, dilation=2, padding=2),
+                ConvBNReLU(channels[1] * 2, channels[2], kernel_size)
             ]
         )
 
     def forward(self, input_tensor):
         output_down_stage = []
-        output_up_stage = []
         # downsampling part
-        output_down_stage.append(self.down_stage[0](input_tensor))
+        output_down_stage.append(
+            self.down_stage[0](input_tensor)
+        )
         for i in range(3):
             output_down_stage.append(
                 self.down_stage[i + 1](output_down_stage[i])
@@ -206,19 +200,14 @@ class RSU4FiveDilation(nn.Module):
         # dilation part
         output_dilation = self.dilation_stage(output_down_stage[-1])
         # upsample part
-        output_up_stage.append(
-            self.up_stage[0](
-                torch.cat((output_dilation, output_down_stage[3]), dim=1)
-            )
+        output_up_stage = self.up_stage[0](
+                torch.cat((output_dilation, output_down_stage[-1]), dim=1)
         )
-        for i in range(2):
-            output_up_stage.append(
-                self.up_stage[i+1](
-                    torch.cat((
-                        output_up_stage[i], output_down_stage[2-i]
-                        ),
-                        dim=1
-                    )
+        for i in range(1, 3):
+            output_up_stage = self.up_stage[i](
+                torch.cat(
+                    (output_up_stage, output_down_stage[-i - 1]),
+                    dim=1
                 )
             )
-        return output_up_stage[-1] + output_down_stage[0]
+        return output_up_stage + output_down_stage[0]
