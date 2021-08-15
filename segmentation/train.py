@@ -13,7 +13,7 @@ class SegmentationRunner(dl.SupervisedRunner):
         self.batch = {
             **batch,
             'logits': all_logits,
-            'overall_logits': nn.Sigmoid()(all_logits[6])
+            'overall_logits': all_logits[6]
         }
 
 
