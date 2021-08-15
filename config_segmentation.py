@@ -94,8 +94,8 @@ class config:
         dir_for_save = './targets'
 
     # Dataloader parameters
-    batch_train = 64
-    batch_valid = 128
+    batch_train = 32
+    batch_valid = 64
     num_workers = 2
 
     # Training parameters
