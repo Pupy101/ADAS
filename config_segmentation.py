@@ -35,9 +35,11 @@ class config:
     # Model
     in_channels = 3
     out_channels = 3
+    is_big_net = False
     model = U2Net(
         in_channels=in_channels,
-        out_channels=out_channels
+        out_channels=out_channels,
+        is_big_net=is_big_net
         )
     # Type of using model train = True - training | False - inference
     train = True
@@ -98,7 +100,7 @@ class config:
 
     # Training parameters
     n_epochs = 10
-    criterion = SegmentationLoss()
+    criterion = SegmentationLoss(base_loss=catalyst_nn.FocalTrevskyLoss(alpha=0.7)
     LR = 3e-4
     optimizer = optim.AdamW
     sheduler_params = {
@@ -113,9 +115,8 @@ class config:
     valid_loader = 'valid'
     valid_metric = 'loss'
     callbacks = [
-        dl.IOUCallback(input_key="logits", target_key="targets"),
-        dl.DiceCallback(input_key="logits", target_key="targets"),
-        dl.TrevskyCallback(input_key="logits", target_key="targets", alpha=0.7),
+        dl.IOUCallback(input_key='overall_logits', target_key='targets'),
+        dl.DiceCallback(input_key='overall_logits', target_key='targets')
     ]
     fp16 = True
     verbose = True

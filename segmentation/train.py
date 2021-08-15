@@ -1,10 +1,20 @@
 import torch
 
-from typing import Dict, Union
+from typing import Mapping, Any
 
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from catalyst import dl, utils
+
+
+class SegmentationRunner(dl.SupervisedRunner):
+    def handle_batch(self, batch: Mapping[str, Any]):
+        all_logits = self.forward(batch)['logits']
+        self.batch = {
+            **batch,
+            'logits': all_logits,
+            'overall_logits': nn.Sigmoid()(all_logits[6])
+        }
 
 
 def train_segmentation(config):
@@ -46,7 +56,7 @@ def train_segmentation(config):
             optimizer=optimizer,
             scheduler=scheduler
         )
-    runner = dl.SupervisedRunner()
+    runner = SegmentationRunner()
     runner.train(
         num_epochs=config.n_epochs,
         model=model,
