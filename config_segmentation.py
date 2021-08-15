@@ -1,6 +1,6 @@
 from typing import List
 
-from torch import nn, optim, Tensor
+from torch import nn, optim, Tensor, tensor
 from catalyst import dl
 from catalyst.contrib import nn as catalyst_nn
 
@@ -100,7 +100,12 @@ class config:
 
     # Training parameters
     n_epochs = 10
-    criterion = SegmentationLoss(base_loss=catalyst_nn.FocalTrevskyLoss(alpha=0.7))
+    criterion = SegmentationLoss(
+        base_loss=catalyst_nn.TrevskyLoss(
+            alpha=0.7,
+            weights=tensor([1, 20, 1])
+        )
+    )
     LR = 3e-4
     optimizer = optim.AdamW
     sheduler_params = {
