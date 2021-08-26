@@ -42,11 +42,14 @@ def train_segmentation(config):
 
     criterion = config.criterion
     optimizer = config.optimizer(model.parameters(), lr=config.LR)
-    scheduler = config.scheduler(
-        optimizer,
-        **config.sheduler_params,
-        steps_per_epoch=len(loaders['train']) + 5
-    )
+    if not (config.scheduler is None or config.sheduler_params is None):
+        scheduler = config.scheduler(
+            optimizer,
+            **config.sheduler_params,
+            steps_per_epoch=len(loaders['train']) + 5
+        )
+    else:
+        scheduler = None
     if config.checkpoint_path:
         checkpoint = utils.load_checkpoint(config.checkpoint_path)
         utils.unpack_checkpoint(
