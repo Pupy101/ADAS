@@ -5,6 +5,7 @@ import torch
 
 from os.path import join as path_join
 
+from tqdm import tqdm
 from catalyst import dl, utils
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
@@ -44,7 +45,7 @@ def inference_segmentation(config):
             optimizer=optimizer
         )
     os.makedirs(config.DIR_PATH_SAVE_RESULT, exist_ok=True)
-    for i, data in enumerate(dataloader):
+    for data in tqdm(dataloader):
         batch, naming = data['features'].to(DEVICE), data['name'][0]
         if config.IS_USE_U2NET:
             output = model(batch)[-1]

@@ -84,7 +84,7 @@ class InferenceDataset(Dataset):
         image = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
         if self.transforms:
             image = self.transforms(image=image)['image']
-        return {'features': image, 'name': [self.files[ind]]}
+        return {'features': image, 'name': [str(self.files[ind])]}
 
 
 # transforms for train stage net
