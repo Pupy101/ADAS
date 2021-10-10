@@ -7,7 +7,7 @@
 ### Description:
 ### This repository resolve multiple task:
 1. Segmentation of the current and other road lanes;
-2. Detection of objects in front of the machine based on the kitty dataset. **(In progress)**
+2. Detection of objects in front of the machine based on the kitty dataset. 
 
 ### Start
 ### For start set config in config files.
@@ -22,4 +22,7 @@ python main.py
 ### Segmentation:
 ### Weights for net:
 1. [U2Net]()
-2. [UNet]() with `Efficientnet-b0` as backbone from library [segmentation-models-pytorch](https://github.com/qubvel/segmentation_models.pytorch) 
+2. [UNet]() with `Efficientnet-b0` as backbone from library [segmentation-models-pytorch](https://github.com/qubvel/segmentation_models.pytorch)
+
+### Object detection
+### *(In progress)*
