@@ -7,17 +7,17 @@ from torch.utils.data import DataLoader, Dataset
 from catalyst import dl, utils
 
 
-class SegmentationRunner(dl.SupervisedRunner):
+class RunnerU2Net(dl.SupervisedRunner):
     def handle_batch(self, batch: Mapping[str, Any]):
         all_logits = self.forward(batch)['logits']
         self.batch = {
             **batch,
             'logits': all_logits,
-            'overall_logits': all_logits[6]
+            'overall_logits': all_logits[-1]
         }
 
 
-def train_segmentation(config):
+def train_segmentation(config) -> None:
     """
     Function training segmentation model
     ------------------------------
@@ -26,26 +26,25 @@ def train_segmentation(config):
     """
     loaders = {
         'train': DataLoader(
-            config.dataset['train'],
+            config.DATASET['train'],
             batch_size=config.batch_train,
             num_workers=config.num_workers,
             shuffle=True
         ),
         'valid': DataLoader(
-            config.dataset['valid'],
+            config.DATASET['valid'],
             batch_size=config.batch_valid,
             num_workers=config.num_workers
         )
     }
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = config.model.to(DEVICE)
-
-    criterion = config.criterion
-    optimizer = config.optimizer(model.parameters(), lr=config.LR)
-    if not (config.scheduler is None or config.sheduler_params is None):
-        scheduler = config.scheduler(
+    model = config.MODEL.to(DEVICE)
+    criterion = config.CRITERION
+    optimizer = config.OPTIMIZER(model.parameters(), **config.OPTIMIZER_PARAMS)
+    if config.SCHEDULER is not None:
+        scheduler = config.SCHEDULER(
             optimizer,
-            **config.sheduler_params,
+            **config.SCHEDULER_PARAMS,
             steps_per_epoch=len(loaders['train']) + 5
         )
     else:
@@ -59,19 +58,14 @@ def train_segmentation(config):
             optimizer=optimizer,
             scheduler=scheduler
         )
-    runner = SegmentationRunner()
-    runner.train(
-        num_epochs=config.n_epochs,
-        model=model,
-        loaders=loaders,
-        criterion=criterion,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        callbacks=config.callbacks,
-        seed=config.seed,
-        logdir=config.logdir,
-        valid_loader=config.valid_loader,
-        valid_metric=config.valid_metric,
-        fp16=config.fp16,
-        verbose=config.verbose
+    config.TRAIN_PARAMS.update(
+        {
+            'loaders': loaders, 'model': model, 'criterion': criterion, 'optimizer': optimizer,
+            'scheduler': scheduler
+        }
     )
+    if config.IS_USE_U2NET:
+        runner = RunnerU2Net()
+    else:
+        runner = dl.SupervisedRunner()
+    runner.train(**config.TRAIN_PARAMS)

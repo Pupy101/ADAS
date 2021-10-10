@@ -3,14 +3,14 @@ import zipfile
 
 import gdown
 
-from config_segmentation import config as segmentation_config
+from config_segmentation import Config as segmentation_config
 
-if segmentation_config.need_segmentation:
-    if segmentation_config.url_datasets:
+if segmentation_config.TYPE_SEGMENTATION_USING in ['train', 'eval']:
+    if segmentation_config.URL_DATASETS:
         cur_dir = os.getcwd()
-        os.makedirs(segmentation_config.dir_for_save_datasets, exist_ok=True)
-        os.chdir(segmentation_config.dir_for_save_datasets)
-        for data in segmentation_config.url_datasets:
+        os.makedirs(segmentation_config.DIR_FOR_SAVE_DATASETS, exist_ok=True)
+        os.chdir(segmentation_config.DIR_FOR_SAVE_DATASETS)
+        for data in segmentation_config.URL_DATASETS:
             gdown.download(
                 url=data['url'],
                 output=data['name']
@@ -18,14 +18,13 @@ if segmentation_config.need_segmentation:
             with zipfile.ZipFile(data['name']) as zip_ref:
                 zip_ref.extractall('./')
         os.chdir(cur_dir)
-    if segmentation_config.url_checkpoint:
+    if segmentation_config.URL_CHECKPOINT:
         cur_dir = os.getcwd()
-        os.makedirs(segmentation_config.dir_for_save_checkpoint, exist_ok=True)
-        os.chdir(segmentation_config.dir_for_save_checkpoint)
-        for data in segmentation_config.url_datasets:
-            gdown.download(
-                url=data['url'],
-                output=data['name']
-            )    
+        os.makedirs(segmentation_config.DIR_FOR_SAVE_CHECKPOINT, exist_ok=True)
+        os.chdir(segmentation_config.DIR_FOR_SAVE_CHECKPOINT)
+        gdown.download(
+            url=segmentation_config.URL_CHECKPOINT['url'],
+            output=segmentation_config.URL_CHECKPOINT['name']
+        )
         os.chdir(cur_dir)
             

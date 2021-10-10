@@ -12,7 +12,6 @@ from albumentations.pytorch import ToTensorV2
 class BDD100K(Dataset):
     """
     Dataset for train segmentation net based on BD100K https://bair.berkeley.edu/blog/2018/05/30/bdd/'
-    ----------------------------------------
     """
     def __init__(
         self,
@@ -22,7 +21,7 @@ class BDD100K(Dataset):
         prefix_with_ext_mask: str = '_drivable_color.png',
         transforms=None,
         check: bool = False
-        ):
+    ):
         self.image_dir = pathlib.Path(image_dir)
         self.mask_dir = pathlib.Path(mask_dir)
         self.ext_images = ext_images
@@ -32,7 +31,8 @@ class BDD100K(Dataset):
         if check:
             self._check()
 
-    def load_image_and_mask(self, image_path, mask_path):
+    @staticmethod
+    def load_image_and_mask(image_path, mask_path):
         img = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
         msk = cv2.cvtColor(cv2.imread(str(mask_path)), cv2.COLOR_BGR2RGB)
         return img, msk, mask_path
@@ -52,7 +52,7 @@ class BDD100K(Dataset):
     def __getitem__(self, ind):
         image_path = self.images[ind]
         mask_path = self.masks[ind]
-        img, msk, _ = self.load_image_and_mask(image_path, mask_path)
+        img, msk, _ = BDD100K.load_image_and_mask(image_path, mask_path)
 
         data = {'image': img, 'mask': msk}
 
@@ -84,7 +84,7 @@ class InferenceDataset(Dataset):
         image = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
         if self.transforms:
             image = self.transforms(image=image)['image']
-        return {'features': image}
+        return {'features': image, 'name': self.files[ind]}
 
 
 # transforms for train stage net
