@@ -27,14 +27,11 @@ def train_segmentation(config) -> None:
     loaders = {
         'train': DataLoader(
             config.DATASET['train'],
-            batch_size=config.batch_train,
-            num_workers=config.num_workers,
-            shuffle=True
+            **config.LOADERS_PARAMS['train']
         ),
         'valid': DataLoader(
             config.DATASET['valid'],
-            batch_size=config.batch_valid,
-            num_workers=config.num_workers
+            **config.LOADERS_PARAMS['valid']
         )
     }
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -49,8 +46,8 @@ def train_segmentation(config) -> None:
         )
     else:
         scheduler = None
-    if config.checkpoint_path:
-        checkpoint = utils.load_checkpoint(config.checkpoint_path)
+    if config.CHECKPOINT_PATH:
+        checkpoint = utils.load_checkpoint(config.CHECKPOINT_PATH)
         utils.unpack_checkpoint(
             checkpoint=checkpoint,
             model=model,

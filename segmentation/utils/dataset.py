@@ -80,11 +80,11 @@ class InferenceDataset(Dataset):
         return len(self.files)
 
     def __getitem__(self, ind):
-        image_path = self.dir_images / self.files[ind]
+        image_path = self.files[ind]
         image = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
         if self.transforms:
             image = self.transforms(image=image)['image']
-        return {'features': image, 'name': self.files[ind]}
+        return {'features': image, 'name': [self.files[ind]]}
 
 
 # transforms for train stage net

@@ -28,7 +28,7 @@ def inference_segmentation(config):
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = config.MODEL.to(DEVICE)
     criterion = config.CRITERION
-    optimizer = config.OPTIMIZER(model.parameters(), lr=config.LR)
+    optimizer = config.OPTIMIZER(model.parameters(), **config.OPTIMIZER_PARAMS)
     config.TRAIN_PARAMS.update(
         {
             'loaders': loaders, 'model': model, 'criterion': criterion, 'optimizer': optimizer,
@@ -43,20 +43,14 @@ def inference_segmentation(config):
             criterion=criterion,
             optimizer=optimizer
         )
-    if config.IS_USE_U2NET:
-        runner = RunnerU2Net()
-    else:
-        runner = dl.SupervisedRunner()
-    runner.train(**config.TRAIN_PARAMS)
     os.makedirs(config.DIR_PATH_SAVE_RESULT, exist_ok=True)
     for i, data in enumerate(dataloader):
+        batch, naming = data['features'].to(DEVICE), data['name'][0]
         if config.IS_USE_U2NET:
-            output = runner.predict_batch(data)[-1]
+            output = model(batch)[-1]
         else:
-            output = runner.predict_batch(data)
+            output = model(batch)
         images = transform_tensor_to_numpy(output)
-        for j in images.shape[0]:
-            img = images[j]
-            name = dataloader.dataset.files[i*config.batch_valid + j]
-            cv2.imwrite(
-                path_join(config.dir_for_save, name), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+        for j in range(images.shape[0]):
+            img, name = images[j], naming[j].rsplit('/', maxsplit=1)[1]
+            cv2.imwrite(path_join(config.DIR_PATH_SAVE_RESULT, name), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))

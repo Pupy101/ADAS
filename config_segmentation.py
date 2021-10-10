@@ -1,5 +1,6 @@
 from typing import List, Dict, Union
 
+import torch
 import segmentation_models_pytorch as smp
 
 from torch import nn, optim, Tensor, tensor
@@ -13,21 +14,20 @@ class SegmentationLossU2Net(nn.Module):
 
     def __init__(
             self,
-            base_loss: nn.Module = catalyst_nn.DiceLoss(),
+            loss: nn.Module = catalyst_nn.DiceLoss(),
             n_outputs: int = 7,
-            weights: List[float] = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+            weights: List[float] = (0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
     ):
         super().__init__()
         assert len(weights) == n_outputs, 'Length of weight must equal number of outputs'
-        self.loss = base_loss
+        self.loss = loss
         self._n_outputs = n_outputs
         self.weights = weights
 
     def forward(self, prediction: List[Tensor], target: Tensor):
-        overall_loss = sum(
-            self.loss(prediction[i], target) * self.weights[i]
-            for i in range(self._n_outputs)
-        )
+        overall_loss = self.loss(prediction[0], target) * self.weights[0]
+        for i in range(1, self._n_outputs):
+            overall_loss += self.loss(prediction[i], target) * self.weights[i]
         return overall_loss
 
 
@@ -35,8 +35,8 @@ class SegmentationMultipleLoss(nn.Module):
 
     def __init__(
             self,
-            losses: List[nn.Module] = [catalyst_nn.DiceLoss()],
-            weights: List[float] = [1]
+            losses: List[nn.Module] = (catalyst_nn.DiceLoss(),),
+            weights: List[float] = (1,)
     ):
         super().__init__()
         assert len(losses) == len(weights), 'Count losses must equal count weights'
@@ -44,10 +44,9 @@ class SegmentationMultipleLoss(nn.Module):
         self.weights = weights
 
     def forward(self, prediction, target):
-        overall_loss = sum(
-            self.losses[i](prediction, target) * self.weights[i]
-            for i in range(len(self.weights))
-        )
+        overall_loss = self.losses[0](prediction, target) * self.weights[0]
+        for i in range(1, len(self.weights)):
+            overall_loss += self.losses[i](prediction, target) * self.weights[i]
         return overall_loss
 
 
@@ -90,7 +89,7 @@ class Config:
             }
         }
     elif TYPE_SEGMENTATION_USING == 'eval':
-        DIR_PATH_DATASET: str = '/content/bdd100k/images/100k/val'
+        DIR_PATH_DATASET_EVAL: str = './datasets/bdd100k/images/100k/val'
         DIR_PATH_SAVE_RESULT = './result'
 
     LOADERS_PARAMS: Dict[str, Dict[str, Union[str, bool, float]]] = {
@@ -149,5 +148,5 @@ class Config:
         }
     elif TYPE_SEGMENTATION_USING == 'eval':
         DATASET = {
-            'valid': InferenceDataset(DIR_PATH_DATASET, transforms=valid_transforms)
+            'valid': InferenceDataset(DIR_PATH_DATASET_EVAL, transforms=valid_transforms)
         }

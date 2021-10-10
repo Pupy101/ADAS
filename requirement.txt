@@ -1,8 +1,4 @@
 catalyst==21.06
--f https://download.pytorch.org/whl/torch_stable.html
-torch==1.8.0+cu111
--f https://download.pytorch.org/whl/torch_stable.html
-torchvision==0.9.0+cu111
 albumentations==1.0.3
 opencv-python==4.5.2.52
 tqdm==4.41.1
