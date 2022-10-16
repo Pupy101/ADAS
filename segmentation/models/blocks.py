@@ -45,7 +45,44 @@ class DWConv2d(nn.Module):
         return self.dw_conv(batch)
 
 
-class DWConv2dBNLeakyReLU(nn.Module):
+class DWConv2dS(nn.Module):
+    """DepthWise convolution with Sigmoid"""
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        stride: int = 1,
+        padding: int = 1,
+        dilation: int = 1,
+    ) -> None:
+        """
+        Block init
+
+        Args:
+            in_channels (int): count input channels
+            out_channels (int): count output channels
+            kernel_size (int, optional): kernel size. Defaults to 3.
+            stride (int, optional): stride size. Defaults to 1.
+            padding (int, optional): padding size. Defaults to 1.
+            dilation (int, optional): dilation size. Defaults to 1.
+        """
+        super().__init__()
+        self.dw_conv = DWConv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+        )
+
+    def forward(self, batch: Tensor) -> Tensor:
+        return torch.sigmoid(self.dw_conv(batch))
+
+
+class DWConv2dBNLReLU(nn.Module):
     """DepthWise convolution + BatchNorm2d + LeakyReLU"""
 
     def __init__(
@@ -83,7 +120,7 @@ class DWConv2dBNLeakyReLU(nn.Module):
         return self.activation(self.batch_norm(self.conv2d(batch)))
 
 
-class DWConvTranspose2d(nn.Module):
+class DWConvT2d(nn.Module):
     """DepthWise transpose convolution"""
 
     def __init__(
@@ -127,7 +164,7 @@ class DWConvTranspose2d(nn.Module):
         return self.dw_transpose_conv(batch)
 
 
-class DWConvTranspose2dBNLeakyReLU(nn.Module):
+class DWConvT2dBNLReLU(nn.Module):
     """DepthWise transpose convolution + BatchNorm2d + LeakyReLU"""
 
     def __init__(
@@ -155,7 +192,7 @@ class DWConvTranspose2dBNLeakyReLU(nn.Module):
             negative_slope (float, optional): negative slope of leaky relu. Defaults to 0.05.
         """
         super().__init__()
-        self.transpose_conv2d = DWConvTranspose2d(
+        self.transpose_conv2d = DWConvT2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
@@ -171,14 +208,58 @@ class DWConvTranspose2dBNLeakyReLU(nn.Module):
         return self.activation(self.batch_norm(self.transpose_conv2d(batch)))
 
 
-class UpsampleBlock(nn.Module):
+class UpDWConv2dS(nn.Module):
+    """Upsample block with DepthWise convolution and Sigmoid"""
+
+    def __init__(
+        self,
+        scale: int,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        stride: int = 1,
+        padding: int = 1,
+        dilation: int = 1,
+    ) -> None:
+        """
+        Block init
+
+        Args:
+            scale_factor (int): scale factor of upsampling
+            in_channels (int): count input channels
+            out_channels (int): count output channels
+            kernel_size (int, optional): kernel size. Defaults to 3.
+            stride (int, optional): stride size. Defaults to 1.
+            padding (int, optional): padding size. Defaults to 1.
+            dilation (int, optional): dilation size. Defaults to 1.
+        """
+        super().__init__()
+        self.upsample_block = nn.Upsample(scale_factor=scale, mode="bilinear", align_corners=True)
+        self.dw_conv = DWConv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+        )
+
+    def forward(self, batch: Tensor) -> Tensor:
+        return torch.sigmoid(self.dw_conv(self.upsample_block(batch)))
+
+
+class UpBlock(nn.Module):
     """
     Upsample block with idea from
     https://github.com/milesial/Pytorch-UNet/blob/67bf11b4db4c5f2891bd7e8e7f58bcde8ee2d2db/unet/unet_parts.py#L42
     """
 
     def __init__(
-        self, in_channels: int, out_channels: int, mid_channels: Optional[int] = None, bilinear: bool = True
+        self,
+        in_channels: int,
+        out_channels: int,
+        mid_channels: Optional[int] = None,
+        bilinear: bool = True,
     ) -> None:
         """
         Block init
@@ -200,7 +281,7 @@ class UpsampleBlock(nn.Module):
                 nn.ReLU(),
             )
         else:
-            self.upsample_block = DWConvTranspose2dBNLeakyReLU(in_channels=in_channels, out_channels=in_channels)
+            self.upsample_block = DWConvT2dBNLReLU(in_channels=in_channels, out_channels=in_channels)
         self.upsample_convolution = nn.Sequential(
             DWConv2d(in_channels=in_channels, out_channels=mid_channels),
             DWConv2d(in_channels=mid_channels, out_channels=out_channels),
@@ -210,11 +291,15 @@ class UpsampleBlock(nn.Module):
         return self.upsample_convolution(self.upsample_block(batch))
 
 
-class DownsampleBlock(nn.Module):
+class DownBlock(nn.Module):
     """Downsample block with max pooling or convolution with stride=2"""
 
     def __init__(
-        self, in_channels: int, out_channels: int, mid_channels: Optional[int] = None, max_pool: bool = True
+        self,
+        in_channels: int,
+        out_channels: int,
+        mid_channels: Optional[int] = None,
+        max_pool: bool = True,
     ) -> None:
         """
         Block init
@@ -234,15 +319,15 @@ class DownsampleBlock(nn.Module):
         else:
             self.downsample_block = DWConv2d(in_channels=in_channels, out_channels=in_channels, stride=2)
         self.downsample_convolution = nn.Sequential(
-            DWConv2dBNLeakyReLU(in_channels=in_channels, out_channels=mid_channels),
-            DWConv2dBNLeakyReLU(in_channels=mid_channels, out_channels=out_channels),
+            DWConv2dBNLReLU(in_channels=in_channels, out_channels=mid_channels),
+            DWConv2dBNLReLU(in_channels=mid_channels, out_channels=out_channels),
         )
 
     def forward(self, batch: Tensor) -> Tensor:
         return self.downsample_convolution(self.downsample_block(batch))
 
 
-class RSUOneDilation(nn.Module):
+class RSUD1(nn.Module):
     """
     Part of U2Net with structure similar vanilla UNet. This part is stage en_(1-4) and de_(1-4) in U2Net
     from https://arxiv.org/pdf/2005.09007.pdf but with only one conv+bn+relu in start of block
@@ -260,7 +345,7 @@ class RSUOneDilation(nn.Module):
         depth: int = 5,
         max_pool: bool = True,
         bilinear: bool = True,
-    ):
+    ) -> None:
         """
         Block init
 
@@ -280,28 +365,22 @@ class RSUOneDilation(nn.Module):
         if mid_channels is None:
             mid_channels = out_channels
         assert depth >= 1, "Depth of RSU unit must be bigger or equal 3"
-        self.preprocessing_conv = DWConv2dBNLeakyReLU(
+        self.preprocessing_conv = DWConv2dBNLReLU(
             in_channels=in_channels, out_channels=mid_channels, kernel_size=kernel_size, padding=padding
         )
 
         self.downsample_stages = nn.ModuleList(
-            [
-                DownsampleBlock(in_channels=mid_channels, out_channels=mid_channels, max_pool=max_pool)
-                for _ in range(depth)
-            ]
+            [DownBlock(in_channels=mid_channels, out_channels=mid_channels, max_pool=max_pool) for _ in range(depth)]
         )
         # dilation part
-        self.dilation_stage = DWConv2dBNLeakyReLU(
+        self.dilation_stage = DWConv2dBNLReLU(
             in_channels=mid_channels, out_channels=mid_channels, padding=pad_dilation, dilation=dilation
         )
         # decoder part
         self.upsample_stages = nn.ModuleList(
-            [
-                UpsampleBlock(in_channels=mid_channels * 2, out_channels=mid_channels, bilinear=bilinear)
-                for _ in range(depth)
-            ]
+            [UpBlock(in_channels=mid_channels * 2, out_channels=mid_channels, bilinear=bilinear) for _ in range(depth)]
         )
-        self.postprocessing_conv = DWConv2dBNLeakyReLU(
+        self.postprocessing_conv = DWConv2dBNLReLU(
             in_channels=mid_channels, out_channels=out_channels, kernel_size=kernel_size, padding=padding
         )
 
@@ -320,7 +399,7 @@ class RSUOneDilation(nn.Module):
         return self.postprocessing_conv(current_batch + preprocessed_batch)
 
 
-class RSU4FiveDilation(nn.Module):
+class RSUD5(nn.Module):
     """Part of U2Net with structure similar vanilla UNet. This NN is stage en_5, en_6 and de_5 in U2Net"""
 
     def __init__(
@@ -332,7 +411,7 @@ class RSU4FiveDilation(nn.Module):
         padding: int = 1,
         dilations: Tuple[int, int, int, int, int] = (2, 4, 8, 4, 2),
         pad_dilations: Tuple[int, int, int, int, int] = (2, 4, 8, 4, 2),
-    ):
+    ) -> None:
         """
         Block init
 
@@ -350,26 +429,26 @@ class RSU4FiveDilation(nn.Module):
         assert len(pad_dilations) == 5
         if mid_channels is None:
             mid_channels = out_channels
-        self.preprocessing_convs = DWConv2dBNLeakyReLU(
+        self.preprocessing_convs = DWConv2dBNLReLU(
             in_channels=in_channels, out_channels=mid_channels, kernel_size=kernel_size, padding=padding
         )
         dil_kwargs = {"out_channels": mid_channels, "kernel_size": kernel_size}
-        self.dilation_stage_1 = DWConv2dBNLeakyReLU(
+        self.dilation_stage_1 = DWConv2dBNLReLU(
             in_channels=mid_channels, padding=pad_dilations[0], dilation=dilations[0], **dil_kwargs
         )
-        self.dilation_stage_2 = DWConv2dBNLeakyReLU(
+        self.dilation_stage_2 = DWConv2dBNLReLU(
             in_channels=mid_channels, padding=pad_dilations[1], dilation=dilations[1], **dil_kwargs
         )
-        self.dilation_stage_3 = DWConv2dBNLeakyReLU(
+        self.dilation_stage_3 = DWConv2dBNLReLU(
             in_channels=mid_channels, padding=pad_dilations[2], dilation=dilations[2], **dil_kwargs
         )
-        self.dilation_stage_4 = DWConv2dBNLeakyReLU(
+        self.dilation_stage_4 = DWConv2dBNLReLU(
             in_channels=mid_channels * 2, padding=pad_dilations[3], dilation=dilations[3], **dil_kwargs
         )
-        self.dilation_stage_5 = DWConv2dBNLeakyReLU(
+        self.dilation_stage_5 = DWConv2dBNLReLU(
             in_channels=mid_channels * 2, padding=pad_dilations[0], dilation=dilations[4], **dil_kwargs
         )
-        self.postprocessing_stage = DWConv2dBNLeakyReLU(
+        self.postprocessing_stage = DWConv2dBNLReLU(
             in_channels=mid_channels, out_channels=out_channels, kernel_size=kernel_size, padding=padding
         )
 

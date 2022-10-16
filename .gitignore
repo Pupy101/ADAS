@@ -1,4 +1,7 @@
-/segmentation/__pycache__
-/segmentation/u2net_blocks/__pycache__
-/segmentation/utils/__pycache__
-.DS_Store
+.idea/
+.mypy_cache/
+.pytest_cache
+.gitignore
+__pycache__/
+*.py[cod]
+.env
