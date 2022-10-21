@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union
 import torch
 from catalyst import dl
 from catalyst.callbacks import Callback
-from catalyst.contrib.losses import FocalLossMultiClass
+from catalyst.contrib.losses import DiceLoss, FocalLossMultiClass
 from catalyst.core.engine import Engine
 from catalyst.core.logger import ILogger
 from catalyst.loggers.wandb import WandbLogger
@@ -158,7 +158,13 @@ optimizer = AdamW(model.parameters(), lr=1e-4)
 
 scheduler = None
 
-criterion = AggregatorManyOutputsLoss(losses=FocalLossMultiClass(), coefficients=(0.1, 0.2, 0.3, 0.4, 0.5, 1))
+criterion = {
+    "focal": AggregatorManyOutputsLoss(losses=FocalLossMultiClass(), coefficients=(0.1, 0.2, 0.3, 0.4, 0.5, 1)),
+    "dice": AggregatorManyOutputsLoss(
+        losses=DiceLoss(class_dim=config.out_channels), coefficients=(0.1, 0.2, 0.3, 0.4, 0.5, 1)
+    ),
+}
+
 
 logger = {"wandb": WandbLogger(project="ADAS", name="Unet", log_batch_metrics=True)}
 
@@ -172,6 +178,10 @@ valid_dataset_args = DatasetArgs(
 callbacks = [
     dl.IOUCallback(input_key="probas", target_key="masks"),
     dl.DiceCallback(input_key="probas", target_key="masks"),
+    dl.CriterionCallback(input_key="logits", target_key="targets", metric_key="loss_focal", criterion_key="focal"),
+    dl.CriterionCallback(input_key="probas", target_key="masks", metric_key="loss_dice", criterion_key="dice"),
+    dl.MetricAggregationCallback(metric_key="loss", metrics={"loss_focal": 0.4, "loss_dice": 0.6}, mode="weighted_sum"),
+    dl.BackwardCallback(metric_key="loss", log_gradient=True),
 ]
 
 train_ddp_config = DDPConfig(
