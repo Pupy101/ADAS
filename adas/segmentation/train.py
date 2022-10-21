@@ -14,8 +14,8 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 from adas.common.loss import AggregatorManyOutputsLoss
 from adas.segmentation.data import BDD100KDataset, create_train_augmentation
-from adas.segmentation.models import Unet
-from adas.segmentation.utils.configs import DatasetArgs, TrainDDPConfig
+from adas.segmentation.models import U2net, Unet
+from adas.segmentation.utils.configs import DatasetArgs, DDPConfig, ModelType, TrainConfig
 
 
 class DDPRunner(dl.SupervisedRunner):
@@ -28,13 +28,13 @@ class DDPRunner(dl.SupervisedRunner):
         target_key: str = "targets",
         loss_key: str = "loss",
     ):
-        self.config: TrainDDPConfig
+        self.config: DDPConfig
         super().__init__(model, engine, input_key, output_key, target_key, loss_key)
 
     def train(
         self,
         *,
-        config: TrainDDPConfig,
+        config: DDPConfig,
         loaders: Mapping[str, DataLoader],
         model: Module,
         criterion: Module,
@@ -119,24 +119,39 @@ class DDPMultipleOutputModelRunner(DDPRunner, MultipleOutputModelRunner):
     pass
 
 
-train_kwargs = {
-    "seed": 123456,
-    "num_epochs": 1,
-    "logdir": "./logs",
-    "resume": None,
-    "valid_loader": "valid",
-    "valid_metric": "loss",
-    "verbose": True,
-    "cpu": True,
-    "fp16": True,
-    "ddp": False,
-    "minimize_valid_metric": True,
-}
+config = TrainConfig(
+    model=ModelType.UNET,
+    in_channels=3,
+    out_channels=3,
+    big=False,
+    max_pool=True,
+    bilinear=True,
+    seed=123456,
+    num_epochs=1,
+    logdir="./logs",
+)
 
 train_batch_size = 2
 valid_batch_size = 2
 
-model = Unet(in_channels=3, out_channels=3)
+model: Union[Unet, U2net]
+
+if config.model is ModelType.UNET:
+    model = Unet(
+        in_channels=config.in_channels,
+        out_channels=config.out_channels,
+        big=config.big,
+        max_pool=config.max_pool,
+        bilinear=config.bilinear,
+    )
+else:
+    model = U2net(
+        in_channels=config.in_channels,
+        out_channels=config.out_channels,
+        big=config.big,
+        max_pool=config.max_pool,
+        bilinear=config.bilinear,
+    )
 
 optimizer = AdamW(model.parameters(), lr=1e-4)
 
@@ -162,19 +177,19 @@ callbacks = [
     dl.DiceCallback(input_key="probas", target_key="masks"),
 ]
 
-train_ddp_config = TrainDDPConfig(
+train_ddp_config = DDPConfig(
     datasets={"train": train_dataset_args, "valid": valid_dataset_args},
     train_batch_size=train_batch_size,
     valid_batch_size=valid_batch_size,
 )
 
-if train_kwargs["ddp"]:
+if config.ddp:
     runner = DDPMultipleOutputModelRunner()
-    train_kwargs["config"] = train_ddp_config
+    config.ddp_config = train_ddp_config
 else:
     train_dataset = BDD100KDataset(**train_dataset_args.asdict())
     valid_dataset = BDD100KDataset(**valid_dataset_args.asdict())
-    train_kwargs["loaders"] = {
+    config.loaders = {
         "train": DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True),
         "valid": DataLoader(valid_dataset, batch_size=valid_batch_size, shuffle=False),
     }
@@ -187,5 +202,5 @@ runner.train(
     criterion=criterion,
     loggers=logger,
     callbacks=callbacks,
-    **train_kwargs  # type: ignore
+    **config.asdict(exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear", "ddp_config"])
 )

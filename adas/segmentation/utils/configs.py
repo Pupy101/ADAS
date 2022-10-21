@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Set, Union
 
@@ -27,7 +28,7 @@ class DatasetArgs(AsDictDataclass):
 
 
 @dataclass
-class TrainDDPConfig(AsDictDataclass):
+class DDPConfig(AsDictDataclass):
     datasets: Mapping[str, DatasetArgs]
     train_batch_size: int
     valid_batch_size: int
@@ -35,6 +36,34 @@ class TrainDDPConfig(AsDictDataclass):
     def __post_init__(self) -> None:
         assert "train" in self.datasets
         assert "valid" in self.datasets
+
+
+class ModelType(Enum):
+    UNET = "UNET"
+    U2NET = "U2NET"
+
+
+@dataclass
+class TrainConfig(AsDictDataclass):
+    model: ModelType
+    in_channels: int
+    out_channels: int
+    big: bool
+    max_pool: bool
+    bilinear: bool
+    seed: int
+    num_epochs: int
+    logdir: str
+    resume: Optional[str] = None
+    valid_loader: str = "valid"
+    valid_metric: str = "loss"
+    verbose: bool = True
+    cpu: bool = True
+    fp16: bool = True
+    ddp: bool = False
+    minimize_valid_metric: bool = True
+    ddp_config: Optional[DDPConfig] = None
+    loaders: Optional[Mapping[str, DataLoader]] = None
 
 
 @dataclass
