@@ -127,12 +127,13 @@ config = TrainConfig(
     max_pool=True,
     bilinear=True,
     seed=123456,
-    num_epochs=1,
+    num_epochs=20,
     logdir="./logs",
+    cpu=False,
 )
 
-train_batch_size = 2
-valid_batch_size = 2
+train_batch_size = 40
+valid_batch_size = 80
 
 model: Union[Unet, U2net]
 
@@ -162,14 +163,10 @@ criterion = AggregatorManyOutputsLoss(losses=FocalLossMultiClass(), coefficients
 logger = {"wandb": WandbLogger(project="ADAS", name="Unet", log_batch_metrics=True)}
 
 train_dataset_args = DatasetArgs(
-    image_dir="/Users/19891176/Downloads/dataset/train/images",
-    mask_dir="/Users/19891176/Downloads/dataset/train/roads",
-    transforms=create_train_augmentation(),
+    image_dir="/content/train/images", mask_dir="/content/train/roads", transforms=create_train_augmentation()
 )
 valid_dataset_args = DatasetArgs(
-    image_dir="/Users/19891176/Downloads/dataset/val/images",
-    mask_dir="/Users/19891176/Downloads/dataset/val/roads",
-    transforms=create_train_augmentation(is_train=False),
+    image_dir="/content/val/images", mask_dir="/content/val/roads", transforms=create_train_augmentation(is_train=False)
 )
 
 callbacks = [
@@ -202,6 +199,6 @@ runner.train(
     criterion=criterion,
     loggers=logger,
     callbacks=callbacks,
-    hparams=config.asdict(exclude=["ddp_config", "loaders"]),
+    hparams=config.asdict(exclude=["model", "ddp_config", "loaders"]),
     **config.asdict(exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear", "ddp_config"])
 )
