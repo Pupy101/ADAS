@@ -202,5 +202,6 @@ runner.train(
     criterion=criterion,
     loggers=logger,
     callbacks=callbacks,
+    hparams=config.asdict(exclude=["ddp_config", "loaders"]),
     **config.asdict(exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear", "ddp_config"])
 )
