@@ -30,13 +30,13 @@ class DWConv2dSConfig(DWConv2dConfig):
 
 
 @dataclass
-class DWConv2dBNLReLUConfig(TorchModule):
-    in_channels: int
-    out_channels: int
-    kernel_size: int = 3
-    padding: int = 1
-    dilation: int = 1
+class DWConv2dBNLReLUConfig(DWConv2dConfig):
     negative_slope: float = 0.05
+
+
+@dataclass
+class NDWConv2dBNLReLUConfig(DWConv2dBNLReLUConfig):
+    count: int = 2
 
 
 @dataclass

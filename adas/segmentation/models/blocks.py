@@ -90,6 +90,7 @@ class DWConv2dBNLReLU(nn.Module):
         in_channels: int,
         out_channels: int,
         kernel_size: int = 3,
+        stride: int = 1,
         padding: int = 1,
         dilation: int = 1,
         negative_slope: float = 0.05,
@@ -101,6 +102,7 @@ class DWConv2dBNLReLU(nn.Module):
             in_channels (int): count input channels
             out_channels (int): count output channels
             kernel_size (int, optional): kernel size. Defaults to 3.
+            stride (int, optional): stride size. Defaults to 1.
             padding (int, optional): padding size. Defaults to 1.
             dilation (int, optional): dilation size. Defaults to 1.
             negative_slope (float, optional): negative slope of leaky relu. Defaults to 0.05.
@@ -110,6 +112,7 @@ class DWConv2dBNLReLU(nn.Module):
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
+            stride=stride,
             padding=padding,
             dilation=dilation,
         )
@@ -118,6 +121,66 @@ class DWConv2dBNLReLU(nn.Module):
 
     def forward(self, batch: Tensor) -> Tensor:
         return self.activation(self.batch_norm(self.conv2d(batch)))
+
+
+class NDWConv2dBNLReLU(nn.Module):
+    """DepthWise convolution + BatchNorm2d + LeakyReLU"""
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        stride: int = 1,
+        padding: int = 1,
+        dilation: int = 1,
+        negative_slope: float = 0.05,
+        count: int = 2,
+    ) -> None:
+        """
+        Block init
+
+        Args:
+            in_channels (int): count input channels
+            out_channels (int): count output channels
+            kernel_size (int, optional): kernel size. Defaults to 3.
+            stride (int, optional): stride size. Defaults to 1.
+            padding (int, optional): padding size. Defaults to 1.
+            dilation (int, optional): dilation size. Defaults to 1.
+            negative_slope (float, optional): negative slope of leaky relu. Defaults to 0.05.
+            count (int): count of conv + bn + LReLU. Defaults to 2.
+        """
+        assert count >= 2
+        super().__init__()
+        self.blocks = nn.ModuleList(
+            [
+                DWConv2dBNLReLU(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    dilation=dilation,
+                    negative_slope=negative_slope,
+                )
+            ]
+        )
+        for _ in range(count - 1):
+            self.blocks.append(
+                DWConv2dBNLReLU(
+                    in_channels=out_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                    padding=padding,
+                    dilation=dilation,
+                    negative_slope=negative_slope,
+                )
+            )
+
+    def forward(self, batch: Tensor) -> Tensor:
+        for block in self.blocks:
+            batch = block(batch)
+        return batch
 
 
 class DWConvT2d(nn.Module):

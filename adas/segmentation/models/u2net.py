@@ -7,7 +7,7 @@ from .blocks import RSUD1, RSUD5, DownBlock, DWConv2dS, UpBlock, UpDWConv2dS
 from .configurations import DownBlockConfig, DWConv2dSConfig, RSUD1Config, RSUD5Config, UpBlockConfig, UpDWConv2dSConfig
 
 
-class U2Net(nn.Module):
+class U2net(nn.Module):
     """
     Implementation from https://arxiv.org/pdf/2005.09007.pdf
     U2net for multiple class or one class segmentation.
@@ -52,7 +52,7 @@ class U2Net(nn.Module):
                 RSUD1Config(RSUD1, in_channels=64, mid_channels=8, out_channels=16, depth=4),
                 RSUD1Config(RSUD1, in_channels=32, mid_channels=4, out_channels=16),
             ]
-        down_conf = [
+        down_conf: List[DownBlockConfig] = [
             DownBlockConfig(
                 DownBlock,
                 in_channels=c.out_channels,
@@ -62,7 +62,7 @@ class U2Net(nn.Module):
             )
             for c in conf[:5]
         ]
-        up_conf = [
+        up_conf: List[UpBlockConfig] = [
             UpBlockConfig(
                 UpBlock,
                 in_channels=c.in_channels,
@@ -72,7 +72,7 @@ class U2Net(nn.Module):
             )
             for c in conf[-5:]
         ]
-        clf_heads_config = [
+        clf_heads_config: List[Union[UpDWConv2dSConfig, DWConv2dSConfig]] = [
             UpDWConv2dSConfig(UpDWConv2dS, in_channels=conf[-6].out_channels, out_channels=out_channels, scale=32),
             UpDWConv2dSConfig(UpDWConv2dS, in_channels=conf[-5].out_channels, out_channels=out_channels, scale=16),
             UpDWConv2dSConfig(UpDWConv2dS, in_channels=conf[-4].out_channels, out_channels=out_channels, scale=8),
@@ -95,10 +95,6 @@ class U2Net(nn.Module):
         # main clf head
         self.main_clf_head = main_clf_head.create_module()
 
-    @property
-    def device(self):
-        return next(self.parameters()).device
-
     def forward(self, batch: Tensor) -> Tuple[Tensor, ...]:
         outputs_encoder, outputs_decoder, headers_output = [], [], []
         for encoder_stage, downsample_stage in zip(self.encoders_stages, self.downsample_stages):
@@ -116,3 +112,7 @@ class U2Net(nn.Module):
         main_output = self.main_clf_head(torch.cat(headers_output, dim=1))
         headers_output.append(main_output)
         return tuple(headers_output)
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
