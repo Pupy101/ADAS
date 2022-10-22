@@ -3,8 +3,14 @@ from typing import List, Tuple, Union
 import torch
 from torch import Tensor, nn
 
-from .blocks import DownBlock, DWConv2dS, NDWConv2dBNLReLU, UpBlock, UpDWConv2dS
-from .configurations import DownBlockConfig, DWConv2dSConfig, NDWConv2dBNLReLUConfig, UpBlockConfig, UpDWConv2dSConfig
+from .configurations import (
+    DownBlockConfig,
+    DWConv2dBNLReLUConfig,
+    DWConv2dSigmoidConfig,
+    DWConv2dSigmoidUpConfig,
+    ManyConfigs,
+    UpBlockConfig,
+)
 
 
 class Unet(nn.Module):
@@ -17,56 +23,140 @@ class Unet(nn.Module):
         bilinear: bool = True,
     ) -> None:
         super().__init__()
-        conf: List[NDWConv2dBNLReLUConfig]
         if big:
             conf = [
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=in_channels, out_channels=64, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=64, out_channels=128, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=128, out_channels=256, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=256, out_channels=512, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=1024, out_channels=512, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=512, out_channels=256, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=256, out_channels=128, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=128, out_channels=64, count=3),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=in_channels, out_channels=64),
+                        DWConv2dBNLReLUConfig(in_channels=64, out_channels=64),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=64, out_channels=128),
+                        DWConv2dBNLReLUConfig(in_channels=128, out_channels=128),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=128, out_channels=256),
+                        DWConv2dBNLReLUConfig(in_channels=256, out_channels=256),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=256, out_channels=512),
+                        DWConv2dBNLReLUConfig(in_channels=512, out_channels=512),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=512, out_channels=1024),
+                        DWConv2dBNLReLUConfig(in_channels=1024, out_channels=512),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=1024, out_channels=512),
+                        DWConv2dBNLReLUConfig(in_channels=512, out_channels=256),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=512, out_channels=256),
+                        DWConv2dBNLReLUConfig(in_channels=256, out_channels=128),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=256, out_channels=128),
+                        DWConv2dBNLReLUConfig(in_channels=128, out_channels=64),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=128, out_channels=64),
+                        DWConv2dBNLReLUConfig(in_channels=64, out_channels=64),
+                    ]
+                ),
             ]
         else:
             conf = [
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=in_channels, out_channels=16, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=16, out_channels=32, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=32, out_channels=64, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=64, out_channels=128, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=256, out_channels=128, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=128, out_channels=64, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=64, out_channels=32, count=3),
-                NDWConv2dBNLReLUConfig(NDWConv2dBNLReLU, in_channels=32, out_channels=16, count=3),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=in_channels, out_channels=32),
+                        DWConv2dBNLReLUConfig(in_channels=32, out_channels=32),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=32, out_channels=64),
+                        DWConv2dBNLReLUConfig(in_channels=64, out_channels=64),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=64, out_channels=128),
+                        DWConv2dBNLReLUConfig(in_channels=128, out_channels=128),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=128, out_channels=256),
+                        DWConv2dBNLReLUConfig(in_channels=256, out_channels=256),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=256, out_channels=512),
+                        DWConv2dBNLReLUConfig(in_channels=512, out_channels=256),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=512, out_channels=256),
+                        DWConv2dBNLReLUConfig(in_channels=256, out_channels=128),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=256, out_channels=128),
+                        DWConv2dBNLReLUConfig(in_channels=128, out_channels=64),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=128, out_channels=64),
+                        DWConv2dBNLReLUConfig(in_channels=64, out_channels=32),
+                    ]
+                ),
+                ManyConfigs(
+                    [
+                        DWConv2dBNLReLUConfig(in_channels=64, out_channels=32),
+                        DWConv2dBNLReLUConfig(in_channels=32, out_channels=32),
+                    ]
+                ),
             ]
         down_conf: List[DownBlockConfig] = [
-            DownBlockConfig(DownBlock, in_channels=c.out_channels, out_channels=c.out_channels, max_pool=max_pool)
-            for c in conf[:4]
+            DownBlockConfig(in_channels=c.configs[-1].out_channels, max_pool=max_pool) for c in conf[:4]  # type: ignore
         ]
-        up_conf: List[UpBlockConfig] = [
-            UpBlockConfig(UpBlock, in_channels=c.in_channels, out_channels=c.out_channels, bilinear=bilinear)
-            for c in conf[-4:]
+        up_conf: List[UpBlockConfig] = [UpBlockConfig(in_channels=c.configs[-1].out_channels, bilinear=bilinear) for c in conf[-5:-1]]  # type: ignore
+        clf_heads_config: List[Union[DWConv2dSigmoidConfig, DWConv2dSigmoidUpConfig]] = [
+            DWConv2dSigmoidUpConfig(in_channels=conf[-5].configs[-1].out_channels, out_channels=out_channels, scale=16),  # type: ignore
+            DWConv2dSigmoidUpConfig(in_channels=conf[-4].configs[-1].out_channels, out_channels=out_channels, scale=8),  # type: ignore
+            DWConv2dSigmoidUpConfig(in_channels=conf[-3].configs[-1].out_channels, out_channels=out_channels, scale=4),  # type: ignore
+            DWConv2dSigmoidUpConfig(in_channels=conf[-2].configs[-1].out_channels, out_channels=out_channels, scale=2),  # type: ignore
+            DWConv2dSigmoidConfig(in_channels=conf[-1].configs[-1].out_channels, out_channels=out_channels),  # type: ignore
         ]
-        dilation_conf = NDWConv2dBNLReLUConfig(
-            NDWConv2dBNLReLU, in_channels=conf[3].out_channels, out_channels=conf[4].in_channels, count=5
-        )
-        clf_heads_config: List[Union[UpDWConv2dSConfig, DWConv2dSConfig]] = [
-            UpDWConv2dSConfig(UpDWConv2dS, in_channels=dilation_conf.out_channels, out_channels=out_channels, scale=16),
-            UpDWConv2dSConfig(UpDWConv2dS, in_channels=conf[-4].out_channels, out_channels=out_channels, scale=8),
-            UpDWConv2dSConfig(UpDWConv2dS, in_channels=conf[-3].out_channels, out_channels=out_channels, scale=4),
-            UpDWConv2dSConfig(UpDWConv2dS, in_channels=conf[-2].out_channels, out_channels=out_channels, scale=2),
-            DWConv2dSConfig(DWConv2dS, in_channels=conf[-1].out_channels, out_channels=out_channels),
-        ]
-        main_clf_head = DWConv2dSConfig(DWConv2dS, in_channels=out_channels * 5, out_channels=out_channels)
+        main_clf_head = DWConv2dSigmoidConfig(in_channels=out_channels * 5, out_channels=out_channels)
 
-        self.encoder_stages = nn.ModuleList([c.create_module() for c in conf[:4]])
-        self.down_stages = nn.ModuleList([c.create_module() for c in down_conf])
-        self.dilation_stage = dilation_conf.create_module()
-        self.up_stages = nn.ModuleList([c.create_module() for c in up_conf])
-        self.decoder_stages = nn.ModuleList([c.create_module() for c in conf[-4:]])
-        self.clf_heads = nn.ModuleList([conf.create_module() for conf in clf_heads_config])
-        self.main_clf_head = main_clf_head.create_module()
+        self.encoder_stages = nn.ModuleList([c.create() for c in conf[:4]])
+        self.down_stages = nn.ModuleList([c.create() for c in down_conf])
+        self.dilation_stage = conf[4].create()
+        self.up_stages = nn.ModuleList([c.create() for c in up_conf])
+        self.decoder_stages = nn.ModuleList([c.create() for c in conf[-4:]])
+        self.clf_heads = nn.ModuleList([conf.create() for conf in clf_heads_config])
+        self.main_clf_head = main_clf_head.create()
 
     def forward(self, batch: Tensor) -> Tuple[Tensor, ...]:
         encoder_outputs, decoder_outputs, headers_outputs = [], [], []

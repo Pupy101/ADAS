@@ -6,6 +6,7 @@ from catalyst.callbacks import Callback
 from catalyst.contrib.losses import DiceLoss, FocalLossMultiClass
 from catalyst.core.engine import Engine
 from catalyst.core.logger import ILogger
+from catalyst.core.runner import RunnerModel
 from catalyst.loggers.wandb import WandbLogger
 from torch.nn import Module
 from torch.optim import AdamW, Optimizer
@@ -21,74 +22,16 @@ from adas.segmentation.utils.configs import DatasetArgs, DDPConfig, ModelType, T
 class DDPRunner(dl.SupervisedRunner):
     def __init__(
         self,
-        model: Optional[Module] = None,
+        config: DDPConfig,
+        model: RunnerModel = None,
         engine: Optional[Engine] = None,
         input_key: str = "features",
-        output_key: str = "logits",
+        output_key: str = "probas",
         target_key: str = "targets",
         loss_key: str = "loss",
     ):
-        self.config: DDPConfig
-        super().__init__(model, engine, input_key, output_key, target_key, loss_key)
-
-    def train(
-        self,
-        *,
-        config: DDPConfig,
-        loaders: Mapping[str, DataLoader],
-        model: Module,
-        criterion: Module,
-        optimizer: Optimizer,
-        scheduler: Optional[_LRScheduler] = None,
-        engine: Optional[Union[Engine, str]] = None,
-        callbacks: Optional[Union[List[Callback], Mapping[str, Callback]]] = None,
-        loggers: Dict[str, ILogger] = None,
-        seed: int = 42,
-        hparams: Dict[str, Any] = None,
-        num_epochs: int = 1,
-        logdir: str = None,
-        resume: str = None,
-        valid_loader: str = None,
-        valid_metric: str = None,
-        minimize_valid_metric: bool = None,
-        verbose: bool = False,
-        timeit: bool = False,
-        check: bool = False,
-        overfit: bool = False,
-        profile: bool = False,
-        load_best_on_end: bool = False,
-        cpu: bool = False,
-        fp16: bool = False,
-        ddp: bool = False
-    ) -> None:
         self.config = config
-        return super().train(
-            loaders=loaders,
-            model=model,
-            engine=engine,
-            criterion=criterion,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            callbacks=callbacks,
-            loggers=loggers,
-            seed=seed,
-            hparams=hparams,
-            num_epochs=num_epochs,
-            logdir=logdir,
-            resume=resume,
-            valid_loader=valid_loader,
-            valid_metric=valid_metric,
-            minimize_valid_metric=minimize_valid_metric,
-            verbose=verbose,
-            timeit=timeit,
-            check=check,
-            overfit=overfit,
-            profile=profile,
-            load_best_on_end=load_best_on_end,
-            cpu=cpu,
-            fp16=fp16,
-            ddp=ddp,
-        )
+        super().__init__(model, engine, input_key, output_key, target_key, loss_key)
 
     def get_engine(self) -> Engine:
         return dl.DistributedDataParallelEngine()
@@ -109,10 +52,24 @@ class DDPRunner(dl.SupervisedRunner):
 
 
 class MultipleOutputModelRunner(dl.SupervisedRunner):
+    def __init__(
+        self,
+        model: RunnerModel = None,
+        engine: Engine = None,
+        input_key: Any = "features",
+        output_key: Any = "probas",
+        target_key: str = "targets",
+        loss_key: str = "loss",
+    ):
+        super().__init__(model, engine, input_key, output_key, target_key, loss_key)
+
     def handle_batch(self, batch: Mapping[str, Any]):
-        logits = self.forward(batch)["logits"]
-        probas = torch.softmax(logits[-1], dim=1)
-        self.batch = {**batch, "logits": logits, "overall_logits": logits[-1], "probas": probas}
+        probas = self.forward(batch)["probas"]
+        self.batch = {
+            **batch,
+            "probas": probas,
+            "overall_probas": probas[-1],
+        }
 
 
 class DDPMultipleOutputModelRunner(DDPRunner, MultipleOutputModelRunner):
@@ -158,30 +115,29 @@ optimizer = AdamW(model.parameters(), lr=1e-4)
 
 scheduler = None
 
-criterion = {
-    "focal": AggregatorManyOutputsLoss(losses=FocalLossMultiClass(), coefficients=(0.1, 0.2, 0.3, 0.4, 0.5, 1)),
-    "dice": AggregatorManyOutputsLoss(
-        losses=DiceLoss(class_dim=config.out_channels), coefficients=(0.1, 0.2, 0.3, 0.4, 0.5, 1)
-    ),
-}
+criterion = AggregatorManyOutputsLoss(
+    losses=DiceLoss(class_dim=config.out_channels, weights=[0.35, 0.6, 0.05]),
+    coefficients=(0.01, 0.02, 0.03, 0.04, 0.05, 1, 0.007),
+)
 
 
 logger = {"wandb": WandbLogger(project="ADAS", name="Unet", log_batch_metrics=True)}
 
 train_dataset_args = DatasetArgs(
-    image_dir="/content/train/images", mask_dir="/content/train/roads", transforms=create_train_augmentation()
+    image_dir="/Users/19891176/Downloads/dataset/train/images",
+    mask_dir="/Users/19891176/Downloads/dataset/train/roads",
+    transforms=create_train_augmentation(),
 )
 valid_dataset_args = DatasetArgs(
-    image_dir="/content/val/images", mask_dir="/content/val/roads", transforms=create_train_augmentation(is_train=False)
+    image_dir="/Users/19891176/Downloads/dataset/val/images",
+    mask_dir="/Users/19891176/Downloads/dataset/val/roads",
+    transforms=create_train_augmentation(is_train=False),
 )
 
 callbacks = [
-    dl.IOUCallback(input_key="probas", target_key="masks"),
-    dl.DiceCallback(input_key="probas", target_key="masks"),
-    dl.CriterionCallback(input_key="logits", target_key="targets", metric_key="loss_focal", criterion_key="focal"),
-    dl.CriterionCallback(input_key="probas", target_key="masks", metric_key="loss_dice", criterion_key="dice"),
-    dl.MetricAggregationCallback(metric_key="loss", metrics={"loss_focal": 0.4, "loss_dice": 0.6}, mode="weighted_sum"),
-    dl.BackwardCallback(metric_key="loss", log_gradient=True),
+    dl.IOUCallback(input_key="overall_probas", target_key="targets"),
+    dl.DiceCallback(input_key="overall_probas", target_key="targets"),
+    dl.CheckpointCallback(logdir=config.logdir, loader_key="valid", metric_key="iou", topk=3),
 ]
 
 train_ddp_config = DDPConfig(
@@ -191,8 +147,7 @@ train_ddp_config = DDPConfig(
 )
 
 if config.ddp:
-    runner = DDPMultipleOutputModelRunner()
-    config.ddp_config = train_ddp_config
+    runner = DDPMultipleOutputModelRunner(train_ddp_config)
 else:
     train_dataset = BDD100KDataset(**train_dataset_args.asdict())
     valid_dataset = BDD100KDataset(**valid_dataset_args.asdict())
@@ -209,6 +164,6 @@ runner.train(
     criterion=criterion,
     loggers=logger,
     callbacks=callbacks,
-    hparams=config.asdict(exclude=["model", "ddp_config", "loaders"]),
-    **config.asdict(exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear", "ddp_config"])
+    hparams=config.asdict(exclude=["model", "loaders"]),
+    **config.asdict(exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear"])
 )

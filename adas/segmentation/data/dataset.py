@@ -65,7 +65,7 @@ class BDD100KDataset(Dataset):
         one_hot_mask[1, mask == 1] = 1
         one_hot_mask[2, mask == 2] = 1
 
-        return {"features": image, "targets": mask.long(), "masks": one_hot_mask.long()}
+        return {"features": image, "targets": one_hot_mask.long()}
 
     def __len__(self):
         return len(self.pairs)

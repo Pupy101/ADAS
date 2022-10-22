@@ -1,11 +1,8 @@
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Set, Union
+from typing import Any, Callable, Iterable, Mapping, Optional, Set, Union
 
-from catalyst.callbacks import Callback
-from catalyst.core.logger import ILogger
-from torch import nn, optim
 from torch.utils.data import DataLoader
 
 
@@ -62,7 +59,6 @@ class TrainConfig(AsDictDataclass):
     fp16: bool = True
     ddp: bool = False
     minimize_valid_metric: bool = True
-    ddp_config: Optional[DDPConfig] = None
     loaders: Optional[Mapping[str, DataLoader]] = None
 
 
