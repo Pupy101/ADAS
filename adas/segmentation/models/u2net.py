@@ -70,7 +70,9 @@ class U2net(nn.Module):
             DWConv2dSigmoidUpConfig(in_channels=conf[-2].out_channels, out_channels=out_channels, scale=2),
             DWConv2dSigmoidConfig(in_channels=conf[-1].out_channels, out_channels=out_channels),
         ]
-        main_clf_head = DWConv2dSigmoidConfig(in_channels=out_channels * 6, out_channels=out_channels)
+        main_clf_head = DWConv2dSigmoidConfig(
+            in_channels=out_channels * 6, out_channels=out_channels, kernel_size=1, padding=0
+        )
 
         # encoder
         self.encoders_stages = nn.ModuleList([conf.create() for conf in conf[:5]])

@@ -1,22 +1,17 @@
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Mapping, Optional, Union
 
-import torch
 from catalyst import dl
-from catalyst.callbacks import Callback
-from catalyst.contrib.losses import DiceLoss, FocalLossMultiClass
+from catalyst.contrib.losses import DiceLoss
 from catalyst.core.engine import Engine
-from catalyst.core.logger import ILogger
 from catalyst.core.runner import RunnerModel
 from catalyst.loggers.wandb import WandbLogger
-from torch.nn import Module
-from torch.optim import AdamW, Optimizer
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim import AdamW
 from torch.utils.data import DataLoader, DistributedSampler
 
 from adas.common.loss import AggregatorManyOutputsLoss
 from adas.segmentation.data import BDD100KDataset, create_train_augmentation
 from adas.segmentation.models import U2net, Unet
-from adas.segmentation.utils.configs import DatasetArgs, DDPConfig, ModelType, TrainConfig
+from adas.segmentation.utils.configs import CLASS_NAMES, DatasetArgs, DDPConfig, ModelType, TrainConfig
 
 
 class DDPRunner(dl.SupervisedRunner):
@@ -65,11 +60,7 @@ class MultipleOutputModelRunner(dl.SupervisedRunner):
 
     def handle_batch(self, batch: Mapping[str, Any]):
         probas = self.forward(batch)["probas"]
-        self.batch = {
-            **batch,
-            "probas": probas,
-            "overall_probas": probas[-1],
-        }
+        self.batch = {**batch, "probas": probas, "last_probas": probas[-2], "agg_probas": probas[-1]}
 
 
 class DDPMultipleOutputModelRunner(DDPRunner, MultipleOutputModelRunner):
@@ -89,8 +80,8 @@ config = TrainConfig(
     cpu=False,
 )
 
-train_batch_size = 40
-valid_batch_size = 80
+train_batch_size = 8  # 40
+valid_batch_size = 16  # 80
 
 model: Union[Unet, U2net]
 
@@ -111,13 +102,13 @@ else:
         bilinear=config.bilinear,
     )
 
-optimizer = AdamW(model.parameters(), lr=1e-4)
+optimizer = AdamW(model.parameters(), lr=1e-3)
 
 scheduler = None
 
 criterion = AggregatorManyOutputsLoss(
-    losses=DiceLoss(class_dim=config.out_channels, weights=[0.35, 0.6, 0.05]),
-    coefficients=(0.01, 0.02, 0.03, 0.04, 0.05, 1, 0.007),
+    losses=DiceLoss(class_dim=config.out_channels),
+    coefficients=(0.01, 0.02, 0.1, 0.2, 1, 0.7),
 )
 
 
@@ -135,9 +126,11 @@ valid_dataset_args = DatasetArgs(
 )
 
 callbacks = [
-    dl.IOUCallback(input_key="overall_probas", target_key="targets"),
-    dl.DiceCallback(input_key="overall_probas", target_key="targets"),
-    dl.CheckpointCallback(logdir=config.logdir, loader_key="valid", metric_key="iou", topk=3),
+    dl.IOUCallback(input_key="last_probas", target_key="targets", prefix="last_", class_names=CLASS_NAMES),
+    dl.DiceCallback(input_key="last_probas", target_key="targets", prefix="last_", class_names=CLASS_NAMES),
+    dl.IOUCallback(input_key="agg_probas", target_key="targets", prefix="agg_", class_names=CLASS_NAMES),
+    dl.DiceCallback(input_key="agg_probas", target_key="targets", prefix="agg_", class_names=CLASS_NAMES),
+    dl.CheckpointCallback(logdir=config.logdir, loader_key="valid", metric_key="last_iou", topk=3),
 ]
 
 train_ddp_config = DDPConfig(

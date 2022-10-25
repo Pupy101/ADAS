@@ -5,6 +5,8 @@ from typing import Any, Callable, Iterable, Mapping, Optional, Set, Union
 
 from torch.utils.data import DataLoader
 
+CLASS_NAMES = ["main_road", "other_roads", "backgroud"]
+
 
 @dataclass
 class AsDictDataclass:

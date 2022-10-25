@@ -148,7 +148,9 @@ class Unet(nn.Module):
             DWConv2dSigmoidUpConfig(in_channels=conf[-2].configs[-1].out_channels, out_channels=out_channels, scale=2),  # type: ignore
             DWConv2dSigmoidConfig(in_channels=conf[-1].configs[-1].out_channels, out_channels=out_channels),  # type: ignore
         ]
-        main_clf_head = DWConv2dSigmoidConfig(in_channels=out_channels * 5, out_channels=out_channels)
+        main_clf_head = DWConv2dSigmoidConfig(
+            in_channels=out_channels * 5, out_channels=out_channels, kernel_size=1, padding=0
+        )
 
         self.encoder_stages = nn.ModuleList([c.create() for c in conf[:4]])
         self.down_stages = nn.ModuleList([c.create() for c in down_conf])
