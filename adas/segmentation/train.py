@@ -80,13 +80,13 @@ config = TrainConfig(
     cpu=False,
 )
 
-train_batch_size = 8  # 40
-valid_batch_size = 16  # 80
+train_batch_size = 40
+valid_batch_size = 80
 
-model: Union[Unet, U2net]
+segmentation_model: Union[Unet, U2net]
 
 if config.model is ModelType.UNET:
-    model = Unet(
+    segmentation_model = Unet(
         in_channels=config.in_channels,
         out_channels=config.out_channels,
         big=config.big,
@@ -94,7 +94,7 @@ if config.model is ModelType.UNET:
         bilinear=config.bilinear,
     )
 else:
-    model = U2net(
+    segmentation_model = U2net(
         in_channels=config.in_channels,
         out_channels=config.out_channels,
         big=config.big,
@@ -102,7 +102,7 @@ else:
         bilinear=config.bilinear,
     )
 
-optimizer = AdamW(model.parameters(), lr=1e-3)
+optimizer = AdamW(segmentation_model.parameters(), lr=1e-3)
 
 scheduler = None
 
@@ -115,14 +115,10 @@ criterion = AggregatorManyOutputsLoss(
 logger = {"wandb": WandbLogger(project="ADAS", name="Unet", log_batch_metrics=True)}
 
 train_dataset_args = DatasetArgs(
-    image_dir="/Users/19891176/Downloads/dataset/train/images",
-    mask_dir="/Users/19891176/Downloads/dataset/train/roads",
-    transforms=create_train_augmentation(),
+    image_dir="/content/train/images", mask_dir="/content/train/roads", transforms=create_train_augmentation()
 )
 valid_dataset_args = DatasetArgs(
-    image_dir="/Users/19891176/Downloads/dataset/val/images",
-    mask_dir="/Users/19891176/Downloads/dataset/val/roads",
-    transforms=create_train_augmentation(is_train=False),
+    image_dir="/content/val/images", mask_dir="/content/val/roads", transforms=create_train_augmentation(is_train=False)
 )
 
 callbacks = [
@@ -151,7 +147,7 @@ else:
     runner = MultipleOutputModelRunner()
 
 runner.train(
-    model=model,
+    model=segmentation_model,
     optimizer=optimizer,
     scheduler=scheduler,
     criterion=criterion,
