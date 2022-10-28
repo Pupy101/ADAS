@@ -11,11 +11,19 @@ from torch.utils.data import DataLoader, DistributedSampler
 from adas.common.loss import AggregatorManyOutputsLoss
 from adas.segmentation.data import BDD100KDataset, create_train_augmentation
 from adas.segmentation.models import U2net, Unet
-from adas.segmentation.utils.configs import CLASS_NAMES, DatasetArgs, DDPConfig, ModelType, TrainConfig
+from adas.segmentation.utils.configs import (
+    CLASS_NAMES,
+    DatasetArgs,
+    DDPConfig,
+    ModelType,
+    TrainConfig,
+)
 
 
 class DDPRunner(dl.SupervisedRunner):
-    def __init__(
+    """Distributed catalyst runner."""
+
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         config: DDPConfig,
         model: RunnerModel = None,
@@ -37,17 +45,23 @@ class DDPRunner(dl.SupervisedRunner):
         valid_data = BDD100KDataset(**self.config.datasets["train"].asdict())
         loaders = {
             "train": DataLoader(
-                train_data, sampler=DistributedSampler(dataset=train_data), batch_size=self.config.train_batch_size
+                train_data,
+                sampler=DistributedSampler(dataset=train_data),
+                batch_size=self.config.train_batch_size,
             ),
             "valid": DataLoader(
-                valid_data, sampler=DistributedSampler(dataset=valid_data), batch_size=self.config.valid_batch_size
+                valid_data,
+                sampler=DistributedSampler(dataset=valid_data),
+                batch_size=self.config.valid_batch_size,
             ),
         }
         return loaders
 
 
 class MultipleOutputModelRunner(dl.SupervisedRunner):
-    def __init__(
+    """Multi output model catalyst runner."""
+
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         model: RunnerModel = None,
         engine: Engine = None,
@@ -60,99 +74,140 @@ class MultipleOutputModelRunner(dl.SupervisedRunner):
 
     def handle_batch(self, batch: Mapping[str, Any]):
         probas = self.forward(batch)["probas"]
-        self.batch = {**batch, "probas": probas, "last_probas": probas[-2], "agg_probas": probas[-1]}
+        self.batch = {
+            **batch,
+            "probas": probas,
+            "last_probas": probas[-2],
+            "agg_probas": probas[-1],
+        }
 
 
-class DDPMultipleOutputModelRunner(DDPRunner, MultipleOutputModelRunner):
-    pass
+class DDPMultipleOutputModelRunner(  # pylint: disable=too-many-ancestors
+    DDPRunner, MultipleOutputModelRunner
+):
+    """Distributed catalyst runner for multi output model."""
+
+    pass  # pylint: disable=unnecessary-pass
 
 
-config = TrainConfig(
+TRAIN_CONFIG = TrainConfig(
     model=ModelType.UNET,
     in_channels=3,
-    out_channels=3,
+    out_channels=2,
     big=False,
     max_pool=True,
-    bilinear=True,
+    bilinear=False,
     seed=123456,
-    num_epochs=20,
+    num_epochs=10,
     logdir="./logs",
     cpu=False,
 )
 
-train_batch_size = 40
-valid_batch_size = 80
+TRAIN_BATCH_SIZE = 8
+VALID_BATCH_SIZE = 16
 
-segmentation_model: Union[Unet, U2net]
+SEGMENTATION_MODEL: Union[Unet, U2net]
 
-if config.model is ModelType.UNET:
-    segmentation_model = Unet(
-        in_channels=config.in_channels,
-        out_channels=config.out_channels,
-        big=config.big,
-        max_pool=config.max_pool,
-        bilinear=config.bilinear,
+if TRAIN_CONFIG.model is ModelType.UNET:
+    SEGMENTATION_MODEL = Unet(
+        in_channels=TRAIN_CONFIG.in_channels,
+        out_channels=TRAIN_CONFIG.out_channels,
+        big=TRAIN_CONFIG.big,
+        max_pool=TRAIN_CONFIG.max_pool,
+        bilinear=TRAIN_CONFIG.bilinear,
     )
 else:
-    segmentation_model = U2net(
-        in_channels=config.in_channels,
-        out_channels=config.out_channels,
-        big=config.big,
-        max_pool=config.max_pool,
-        bilinear=config.bilinear,
+    SEGMENTATION_MODEL = U2net(
+        in_channels=TRAIN_CONFIG.in_channels,
+        out_channels=TRAIN_CONFIG.out_channels,
+        big=TRAIN_CONFIG.big,
+        max_pool=TRAIN_CONFIG.max_pool,
+        bilinear=TRAIN_CONFIG.bilinear,
     )
 
-optimizer = AdamW(segmentation_model.parameters(), lr=1e-3)
+OPTIMIZER = AdamW(SEGMENTATION_MODEL.parameters(), lr=1e-4)
 
-scheduler = None
+SCHEDULER = None
 
-criterion = AggregatorManyOutputsLoss(
-    losses=DiceLoss(class_dim=config.out_channels),
-    coefficients=(0.01, 0.02, 0.1, 0.2, 1, 0.7),
+CRITERION = AggregatorManyOutputsLoss(
+    losses=DiceLoss(class_dim=TRAIN_CONFIG.out_channels),
+    coefficients=(0.01, 0.05, 0.2, 0.5, 1, 0.0008),
 )
 
+LOGGER = {"wandb": WandbLogger(project="ADAS", name="Unet_test_run", log_batch_metrics=True)}
 
-logger = {"wandb": WandbLogger(project="ADAS", name="Unet", log_batch_metrics=True)}
-
-train_dataset_args = DatasetArgs(
-    image_dir="/content/train/images", mask_dir="/content/train/roads", transforms=create_train_augmentation()
+TRAIN_DATASET_ARGS = DatasetArgs(
+    image_dir="/Users/19891176/Downloads/dataset/train/images",
+    mask_dir="/Users/19891176/Downloads/dataset/train/roads",
+    transforms=create_train_augmentation(),
 )
-valid_dataset_args = DatasetArgs(
-    image_dir="/content/val/images", mask_dir="/content/val/roads", transforms=create_train_augmentation(is_train=False)
+VALID_DATASET_ARGS = DatasetArgs(
+    image_dir="/Users/19891176/Downloads/dataset/val/images",
+    mask_dir="/Users/19891176/Downloads/dataset/val/roads",
+    transforms=create_train_augmentation(is_train=False),
 )
 
-callbacks = [
-    dl.IOUCallback(input_key="last_probas", target_key="targets", prefix="last_", class_names=CLASS_NAMES),
-    dl.DiceCallback(input_key="last_probas", target_key="targets", prefix="last_", class_names=CLASS_NAMES),
-    dl.IOUCallback(input_key="agg_probas", target_key="targets", prefix="agg_", class_names=CLASS_NAMES),
-    dl.DiceCallback(input_key="agg_probas", target_key="targets", prefix="agg_", class_names=CLASS_NAMES),
-    dl.CheckpointCallback(logdir=config.logdir, loader_key="valid", metric_key="last_iou", topk=3),
+CALLBACKS = [
+    dl.IOUCallback(
+        input_key="last_probas",
+        target_key="targets",
+        prefix="last_",
+        class_names=CLASS_NAMES,
+    ),
+    dl.DiceCallback(
+        input_key="last_probas",
+        target_key="targets",
+        prefix="last_",
+        class_names=CLASS_NAMES,
+    ),
+    dl.IOUCallback(
+        input_key="agg_probas",
+        target_key="targets",
+        prefix="agg_",
+        class_names=CLASS_NAMES,
+    ),
+    dl.DiceCallback(
+        input_key="agg_probas",
+        target_key="targets",
+        prefix="agg_",
+        class_names=CLASS_NAMES,
+    ),
+    dl.CheckpointCallback(
+        logdir=TRAIN_CONFIG.logdir, loader_key="valid", metric_key="last_iou", topk=3
+    ),
+    dl.CheckRunCallback(num_batch_steps=20, num_epoch_steps=20),
+    dl.EarlyStoppingCallback(
+        loader_key="valid", metric_key="loss", minimize=True, patience=3, min_delta=1e-2
+    ),
+    dl.ProfilerCallback(loader_key="valid"),
 ]
 
 train_ddp_config = DDPConfig(
-    datasets={"train": train_dataset_args, "valid": valid_dataset_args},
-    train_batch_size=train_batch_size,
-    valid_batch_size=valid_batch_size,
+    datasets={"train": TRAIN_DATASET_ARGS, "valid": VALID_DATASET_ARGS},
+    train_batch_size=TRAIN_BATCH_SIZE,
+    valid_batch_size=VALID_BATCH_SIZE,
 )
 
-if config.ddp:
-    runner = DDPMultipleOutputModelRunner(train_ddp_config)
+if TRAIN_CONFIG.ddp:
+    RUNNER = DDPMultipleOutputModelRunner(train_ddp_config)
 else:
-    train_dataset = BDD100KDataset(**train_dataset_args.asdict())
-    valid_dataset = BDD100KDataset(**valid_dataset_args.asdict())
-    config.loaders = {
-        "train": DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True),
-        "valid": DataLoader(valid_dataset, batch_size=valid_batch_size, shuffle=False),
+    TRAIN_DATASET = BDD100KDataset(**TRAIN_DATASET_ARGS.asdict())
+    VALID_DATASET = BDD100KDataset(**VALID_DATASET_ARGS.asdict())
+    TRAIN_CONFIG.loaders = {
+        "train": DataLoader(TRAIN_DATASET, batch_size=TRAIN_BATCH_SIZE, shuffle=True),
+        "valid": DataLoader(VALID_DATASET, batch_size=VALID_BATCH_SIZE, shuffle=False),
     }
-    runner = MultipleOutputModelRunner()
+    RUNNER = MultipleOutputModelRunner()
 
-runner.train(
-    model=segmentation_model,
-    optimizer=optimizer,
-    scheduler=scheduler,
-    criterion=criterion,
-    loggers=logger,
-    callbacks=callbacks,
-    hparams=config.asdict(exclude=["model", "loaders"]),
-    **config.asdict(exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear"])
+RUNNER.train(
+    model=SEGMENTATION_MODEL,
+    OPTIMIZER=OPTIMIZER,
+    SCHEDULER=SCHEDULER,
+    CRITERION=CRITERION,
+    loggers=LOGGER,
+    CALLBACKS=CALLBACKS,
+    hparams=TRAIN_CONFIG.asdict(exclude=["model", "loaders"]),
+    **TRAIN_CONFIG.asdict(
+        exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear"]
+    )
 )

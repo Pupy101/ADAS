@@ -3,6 +3,7 @@ from typing import List, Tuple, Union
 import torch
 from torch import Tensor, nn
 
+from .blocks import ModuleWithDevice
 from .configurations import (
     DownBlockConfig,
     DWConv2dBNLReLUConfig,
@@ -13,8 +14,10 @@ from .configurations import (
 )
 
 
-class Unet(nn.Module):
-    def __init__(
+class Unet(ModuleWithDevice):
+    """Unet model https://arxiv.org/pdf/1505.04597.pdf"""
+
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         in_channels: int,
         out_channels: int,
@@ -22,6 +25,7 @@ class Unet(nn.Module):
         max_pool: bool = True,
         bilinear: bool = True,
     ) -> None:
+        """Model init"""
         super().__init__()
         if big:
             conf = [
@@ -138,18 +142,43 @@ class Unet(nn.Module):
                 ),
             ]
         down_conf: List[DownBlockConfig] = [
-            DownBlockConfig(in_channels=c.configs[-1].out_channels, max_pool=max_pool) for c in conf[:4]  # type: ignore
+            DownBlockConfig(in_channels=c.configs[-1].out_channels, max_pool=max_pool)
+            for c in conf[:4]
         ]
-        up_conf: List[UpBlockConfig] = [UpBlockConfig(in_channels=c.configs[-1].out_channels, bilinear=bilinear) for c in conf[-5:-1]]  # type: ignore
+        up_conf: List[UpBlockConfig] = [
+            UpBlockConfig(in_channels=c.configs[-1].out_channels, bilinear=bilinear)
+            for c in conf[-5:-1]
+        ]
         clf_heads_config: List[Union[DWConv2dSigmoidConfig, DWConv2dSigmoidUpConfig]] = [
-            DWConv2dSigmoidUpConfig(in_channels=conf[-5].configs[-1].out_channels, out_channels=out_channels, scale=16),  # type: ignore
-            DWConv2dSigmoidUpConfig(in_channels=conf[-4].configs[-1].out_channels, out_channels=out_channels, scale=8),  # type: ignore
-            DWConv2dSigmoidUpConfig(in_channels=conf[-3].configs[-1].out_channels, out_channels=out_channels, scale=4),  # type: ignore
-            DWConv2dSigmoidUpConfig(in_channels=conf[-2].configs[-1].out_channels, out_channels=out_channels, scale=2),  # type: ignore
-            DWConv2dSigmoidConfig(in_channels=conf[-1].configs[-1].out_channels, out_channels=out_channels),  # type: ignore
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-5].configs[-1].out_channels,
+                out_channels=out_channels,
+                scale=16,
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-4].configs[-1].out_channels,
+                out_channels=out_channels,
+                scale=8,
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-3].configs[-1].out_channels,
+                out_channels=out_channels,
+                scale=4,
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-2].configs[-1].out_channels,
+                out_channels=out_channels,
+                scale=2,
+            ),
+            DWConv2dSigmoidConfig(
+                in_channels=conf[-1].configs[-1].out_channels, out_channels=out_channels
+            ),
         ]
         main_clf_head = DWConv2dSigmoidConfig(
-            in_channels=out_channels * 5, out_channels=out_channels, kernel_size=1, padding=0
+            in_channels=out_channels * 5,
+            out_channels=out_channels,
+            kernel_size=1,
+            padding=0,
         )
 
         self.encoder_stages = nn.ModuleList([c.create() for c in conf[:4]])
@@ -161,6 +190,7 @@ class Unet(nn.Module):
         self.main_clf_head = main_clf_head.create()
 
     def forward(self, batch: Tensor) -> Tuple[Tensor, ...]:
+        """Forward step of module"""
         encoder_outputs, decoder_outputs, headers_outputs = [], [], []
         for encoder_stage, down_stage in zip(self.encoder_stages, self.down_stages):
             batch = encoder_stage(batch)
@@ -168,14 +198,12 @@ class Unet(nn.Module):
             batch = down_stage(batch)
         batch = self.dilation_stage(batch)
         decoder_outputs.append(batch)
-        for encoder_batch, up_stage, decoder_stage in zip(encoder_outputs[::-1], self.up_stages, self.decoder_stages):
+        for encoder_batch, up_stage, decoder_stage in zip(
+            encoder_outputs[::-1], self.up_stages, self.decoder_stages
+        ):
             batch = decoder_stage(torch.cat([encoder_batch, up_stage(batch)], dim=1))
             decoder_outputs.append(batch)
         for decoder_batch, clf_head in zip(decoder_outputs, self.clf_heads):
             headers_outputs.append(clf_head(decoder_batch))
         headers_outputs.append(self.main_clf_head(torch.cat(headers_outputs, dim=1)))
         return tuple(headers_outputs)
-
-    @property
-    def device(self):
-        return next(self.parameters()).device

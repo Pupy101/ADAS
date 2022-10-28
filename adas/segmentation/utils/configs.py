@@ -5,12 +5,15 @@ from typing import Any, Callable, Iterable, Mapping, Optional, Set, Union
 
 from torch.utils.data import DataLoader
 
-CLASS_NAMES = ["main_road", "other_roads", "backgroud"]
+CLASS_NAMES = ["main_road", "backgroud"]
 
 
 @dataclass
 class AsDictDataclass:
+    """Mixin class for factory method 'asdict'"""
+
     def asdict(self, exclude: Optional[Iterable[str]] = None) -> Mapping[str, Any]:
+        """Method for representation dataclass as dict"""
         dictionary = asdict(self)
         if exclude is not None:
             for key in exclude:
@@ -20,6 +23,8 @@ class AsDictDataclass:
 
 @dataclass
 class DatasetArgs(AsDictDataclass):
+    """Params for create torch Dataset (need for DDP)"""
+
     image_dir: Union[str, Path]
     mask_dir: Union[str, Path]
     transforms: Callable
@@ -28,6 +33,8 @@ class DatasetArgs(AsDictDataclass):
 
 @dataclass
 class DDPConfig(AsDictDataclass):
+    """DDP special config for create dataloader in each process"""
+
     datasets: Mapping[str, DatasetArgs]
     train_batch_size: int
     valid_batch_size: int
@@ -38,12 +45,16 @@ class DDPConfig(AsDictDataclass):
 
 
 class ModelType(Enum):
+    """Acceptable models types"""
+
     UNET = "UNET"
     U2NET = "U2NET"
 
 
 @dataclass
-class TrainConfig(AsDictDataclass):
+class TrainConfig(AsDictDataclass):  # pylint: disable=too-many-instance-attributes
+    """Config for train segmentation model"""
+
     model: ModelType
     in_channels: int
     out_channels: int
@@ -58,7 +69,7 @@ class TrainConfig(AsDictDataclass):
     valid_metric: str = "loss"
     verbose: bool = True
     cpu: bool = True
-    fp16: bool = True
+    fp16: bool = False
     ddp: bool = False
     minimize_valid_metric: bool = True
     loaders: Optional[Mapping[str, DataLoader]] = None
@@ -66,4 +77,6 @@ class TrainConfig(AsDictDataclass):
 
 @dataclass
 class InferenceConfig(AsDictDataclass):
-    pass
+    """Config for inference segmentation model"""
+
+    pass  # pylint: disable=unnecessary-pass

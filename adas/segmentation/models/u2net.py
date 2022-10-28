@@ -3,6 +3,7 @@ from typing import List, Tuple, Union
 import torch
 from torch import Tensor, nn
 
+from .blocks import ModuleWithDevice
 from .configurations import (
     DownBlockConfig,
     DWConv2dSigmoidConfig,
@@ -13,14 +14,14 @@ from .configurations import (
 )
 
 
-class U2net(nn.Module):
+class U2net(ModuleWithDevice):
     """
     Implementation from https://arxiv.org/pdf/2005.09007.pdf
     U2net for multiple class or one class segmentation.
     Number of class can be changed by parametr \'out_channels\'.
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         in_channels: int,
         out_channels: int,
@@ -28,6 +29,7 @@ class U2net(nn.Module):
         max_pool: bool = True,
         bilinear: bool = True,
     ):
+        """Module init"""
         super().__init__()
         conf: List[Union[RSUD1Config, RSUD5Config]]
         if big:
@@ -61,17 +63,32 @@ class U2net(nn.Module):
         down_conf: List[DownBlockConfig] = [
             DownBlockConfig(in_channels=c.out_channels, max_pool=max_pool) for c in conf[:5]
         ]
-        up_conf: List[UpBlockConfig] = [UpBlockConfig(in_channels=c.in_channels, bilinear=bilinear) for c in conf[-5:]]
+        up_conf: List[UpBlockConfig] = [
+            UpBlockConfig(in_channels=c.in_channels, bilinear=bilinear) for c in conf[-5:]
+        ]
         clf_heads_config: List[Union[DWConv2dSigmoidConfig, DWConv2dSigmoidUpConfig]] = [
-            DWConv2dSigmoidUpConfig(in_channels=conf[-6].out_channels, out_channels=out_channels, scale=32),
-            DWConv2dSigmoidUpConfig(in_channels=conf[-5].out_channels, out_channels=out_channels, scale=16),
-            DWConv2dSigmoidUpConfig(in_channels=conf[-4].out_channels, out_channels=out_channels, scale=8),
-            DWConv2dSigmoidUpConfig(in_channels=conf[-3].out_channels, out_channels=out_channels, scale=4),
-            DWConv2dSigmoidUpConfig(in_channels=conf[-2].out_channels, out_channels=out_channels, scale=2),
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-6].out_channels, out_channels=out_channels, scale=32
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-5].out_channels, out_channels=out_channels, scale=16
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-4].out_channels, out_channels=out_channels, scale=8
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-3].out_channels, out_channels=out_channels, scale=4
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=conf[-2].out_channels, out_channels=out_channels, scale=2
+            ),
             DWConv2dSigmoidConfig(in_channels=conf[-1].out_channels, out_channels=out_channels),
         ]
         main_clf_head = DWConv2dSigmoidConfig(
-            in_channels=out_channels * 6, out_channels=out_channels, kernel_size=1, padding=0
+            in_channels=out_channels * 6,
+            out_channels=out_channels,
+            kernel_size=1,
+            padding=0,
         )
 
         # encoder
@@ -88,6 +105,7 @@ class U2net(nn.Module):
         self.main_clf_head = main_clf_head.create()
 
     def forward(self, batch: Tensor) -> Tuple[Tensor, ...]:
+        """Forward step of module"""
         outputs_encoder, outputs_decoder, headers_output = [], [], []
         for encoder_stage, downsample_stage in zip(self.encoders_stages, self.downsample_stages):
             batch = downsample_stage(encoder_stage(batch))
@@ -104,7 +122,3 @@ class U2net(nn.Module):
         main_output = self.main_clf_head(torch.cat(headers_output, dim=1))
         headers_output.append(main_output)
         return tuple(headers_output)
-
-    @property
-    def device(self):
-        return next(self.parameters()).device

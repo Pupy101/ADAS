@@ -5,6 +5,7 @@ from albumentations.pytorch import ToTensorV2
 
 
 def create_train_augmentation(is_train: bool = True) -> Callable:
+    """Creation augmentation for train or validation"""
     if is_train:
         return A.Compose(
             [
