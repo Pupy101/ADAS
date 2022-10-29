@@ -1,7 +1,7 @@
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Optional, Set, Union
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Set, Union
 
 from torch.utils.data import DataLoader
 
@@ -12,7 +12,7 @@ CLASS_NAMES = ["main_road", "backgroud"]
 class AsDictDataclass:
     """Mixin class for factory method 'asdict'"""
 
-    def asdict(self, exclude: Optional[Iterable[str]] = None) -> Mapping[str, Any]:
+    def asdict(self, exclude: Optional[Iterable[str]] = None) -> Dict[str, Any]:
         """Method for representation dataclass as dict"""
         dictionary = asdict(self)
         if exclude is not None:

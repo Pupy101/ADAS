@@ -103,8 +103,8 @@ TRAIN_CONFIG = TrainConfig(
     cpu=False,
 )
 
-TRAIN_BATCH_SIZE = 8
-VALID_BATCH_SIZE = 16
+TRAIN_BATCH_SIZE = 40
+VALID_BATCH_SIZE = 80
 
 SEGMENTATION_MODEL: Union[Unet, U2net]
 
@@ -131,19 +131,19 @@ SCHEDULER = None
 
 CRITERION = AggregatorManyOutputsLoss(
     losses=DiceLoss(class_dim=TRAIN_CONFIG.out_channels),
-    coefficients=(0.01, 0.05, 0.2, 0.5, 1, 0.0008),
+    coefficients=(0.01, 0.05, 0.2, 0.5, 1, 0.5),
 )
 
 LOGGER = {"wandb": WandbLogger(project="ADAS", name="Unet_test_run", log_batch_metrics=True)}
 
 TRAIN_DATASET_ARGS = DatasetArgs(
-    image_dir="/Users/19891176/Downloads/dataset/train/images",
-    mask_dir="/Users/19891176/Downloads/dataset/train/roads",
+    image_dir="/content/train/images",
+    mask_dir="/content/train/roads",
     transforms=create_train_augmentation(),
 )
 VALID_DATASET_ARGS = DatasetArgs(
-    image_dir="/Users/19891176/Downloads/dataset/val/images",
-    mask_dir="/Users/19891176/Downloads/dataset/val/roads",
+    image_dir="/content/val/images",
+    mask_dir="/content/val/roads",
     transforms=create_train_augmentation(is_train=False),
 )
 
@@ -173,11 +173,17 @@ CALLBACKS = [
         class_names=CLASS_NAMES,
     ),
     dl.CheckpointCallback(
-        logdir=TRAIN_CONFIG.logdir, loader_key="valid", metric_key="last_iou", topk=3
+        logdir=TRAIN_CONFIG.logdir,
+        loader_key="valid",
+        metric_key="last_iou",
+        topk=3,
     ),
-    dl.CheckRunCallback(num_batch_steps=20, num_epoch_steps=20),
     dl.EarlyStoppingCallback(
-        loader_key="valid", metric_key="loss", minimize=True, patience=3, min_delta=1e-2
+        loader_key="valid",
+        metric_key="loss",
+        minimize=True,
+        patience=3,
+        min_delta=1e-2,
     ),
     dl.ProfilerCallback(loader_key="valid"),
 ]
@@ -199,6 +205,13 @@ else:
     }
     RUNNER = MultipleOutputModelRunner()
 
+HPARAMS = TRAIN_CONFIG.asdict(exclude=["model", "loaders"])
+if isinstance(CRITERION, AggregatorManyOutputsLoss):
+    HPARAMS["loss_coefs"] = CRITERION.coeffs
+ADDITIONAL_PARAMS_RUNNER = TRAIN_CONFIG.asdict(
+    exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear"]
+)
+
 RUNNER.train(
     model=SEGMENTATION_MODEL,
     OPTIMIZER=OPTIMIZER,
@@ -206,8 +219,6 @@ RUNNER.train(
     CRITERION=CRITERION,
     loggers=LOGGER,
     CALLBACKS=CALLBACKS,
-    hparams=TRAIN_CONFIG.asdict(exclude=["model", "loaders"]),
-    **TRAIN_CONFIG.asdict(
-        exclude=["model", "in_channels", "out_channels", "big", "max_pool", "bilinear"]
-    )
+    hparams=HPARAMS,
+    **ADDITIONAL_PARAMS_RUNNER
 )
