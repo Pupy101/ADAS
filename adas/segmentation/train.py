@@ -121,13 +121,13 @@ if __name__ == "__main__":
     )
 
     TRAIN_DATASET_ARGS = DatasetArgs(
-        image_dir="/content/train/images",
-        mask_dir="/content/train/roads",
+        image_dir="/Users/19891176/Downloads/dataset/train/images",
+        mask_dir="/Users/19891176/Downloads/dataset/train/roads",
         transforms=create_train_augmentation(),
     )
     VALID_DATASET_ARGS = DatasetArgs(
-        image_dir="/content/val/images",
-        mask_dir="/content/val/roads",
+        image_dir="/Users/19891176/Downloads/dataset/val/images",
+        mask_dir="/Users/19891176/Downloads/dataset/val/roads",
         transforms=create_train_augmentation(is_train=False),
     )
 
@@ -171,6 +171,13 @@ if __name__ == "__main__":
         ),
         dl.ProfilerCallback(loader_key="valid"),
     ]
+    if TRAIN_CONFIG.count_batches is not None:
+        CALLBACKS.append(
+            dl.CheckRunCallback(
+                num_batch_steps=TRAIN_CONFIG.count_batches,
+                num_epoch_steps=TRAIN_CONFIG.num_epochs,
+            )
+        )
 
     TRAIN_DDP_CONFIG = DDPConfig(
         datasets={"train": TRAIN_DATASET_ARGS, "valid": VALID_DATASET_ARGS},
@@ -195,22 +202,24 @@ if __name__ == "__main__":
         HPARAMS["loss_coefs"] = CRITERION.coeffs  # save coefficients
     ADDITIONAL_PARAMS_RUNNER = TRAIN_CONFIG.asdict(
         exclude=[
-            "model",
-            "in_channels",
-            "out_channels",
             "big",
-            "max_pool",
             "bilinear",
+            "count_batches",
+            "in_channels",
             "learning_rate",
+            "logging",
+            "max_pool",
+            "model",
+            "out_channels",
         ]
     )
 
     RUNNER.train(
         model=SEGMENTATION_MODEL,
-        OPTIMIZER=OPTIMIZER,
-        CRITERION=CRITERION,
+        optimizer=OPTIMIZER,
+        criterion=CRITERION,
         loggers=LOGGER,
-        CALLBACKS=CALLBACKS,
+        callbacks=CALLBACKS,
         hparams=HPARAMS,
         **ADDITIONAL_PARAMS_RUNNER
     )

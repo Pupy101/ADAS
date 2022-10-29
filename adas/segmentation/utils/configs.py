@@ -73,6 +73,7 @@ class TrainConfig(AsDictDataclass):  # pylint: disable=too-many-instance-attribu
     cpu: bool = True
     fp16: bool = False
     ddp: bool = False
+    count_batches: Optional[int] = None
     minimize_valid_metric: bool = True
     loaders: Optional[Mapping[str, DataLoader]] = None
 
