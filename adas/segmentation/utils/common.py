@@ -1,10 +1,9 @@
 from argparse import ArgumentParser
-from typing import Tuple
 
 from adas.segmentation.utils.configs import ModelType, TrainConfig
 
 
-def parse_train_args() -> Tuple[TrainConfig, int, int]:
+def parse_train_args() -> TrainConfig:
     parser = ArgumentParser()
     parser.add_argument(
         "--train_batch_size",
@@ -61,6 +60,12 @@ def parse_train_args() -> Tuple[TrainConfig, int, int]:
         "--num_epochs", type=int, default=10, help="Count training epochs (default: %(default)s)"
     )
     parser.add_argument(
+        "--valid_size",
+        type=float,
+        default=0.3,
+        help="Size of valid dataset (default: %(default)s)",
+    )
+    parser.add_argument(
         "--run_n_batches",
         "-n_batches",
         type=int,
@@ -114,26 +119,25 @@ def parse_train_args() -> Tuple[TrainConfig, int, int]:
         model_type = ModelType.UNET if args.model_type == "Unet" else ModelType.U2NET
     else:
         raise ValueError(f"Strange model type: '{args.model_type}'")
-    return (
-        TrainConfig(
-            model=model_type,
-            in_channels=args.in_channels,
-            out_channels=args.out_channels,
-            big=args.big,
-            max_pool=args.max_pool,
-            bilinear=args.bilinear,
-            learning_rate=args.learning_rate,
-            seed=args.seed,
-            logging=args.logging,
-            num_epochs=args.num_epochs,
-            count_batches=args.run_n_batches,
-            logdir=args.logdir,
-            resume=args.resume,
-            verbose=args.verbose,
-            cpu=args.cpu,
-            fp16=args.fp16,
-            ddp=args.ddp,
-        ),
-        args.train_batch_size,
-        args.valid_batch_size,
+    return TrainConfig(
+        model=model_type,
+        in_channels=args.in_channels,
+        out_channels=args.out_channels,
+        big=args.big,
+        max_pool=args.max_pool,
+        bilinear=args.bilinear,
+        learning_rate=args.learning_rate,
+        seed=args.seed,
+        logging=args.logging,
+        num_epochs=args.num_epochs,
+        valid_size=args.valid_size,
+        count_batches=args.run_n_batches,
+        logdir=args.logdir,
+        resume=args.resume,
+        verbose=args.verbose,
+        cpu=args.cpu,
+        fp16=args.fp16,
+        ddp=args.ddp,
+        train_batch_size=args.train_batch_size,
+        valid_batch_size=args.valid_batch_size,
     )

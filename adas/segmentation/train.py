@@ -9,6 +9,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, DistributedSampler
 
 from adas.common.loss import AggregatorManyOutputsLoss
+from adas.common.utils import train_test_split
 from adas.segmentation.data import BDD100KDataset, create_train_augmentation
 from adas.segmentation.models import U2net, Unet
 from adas.segmentation.utils.common import parse_train_args
@@ -35,9 +36,10 @@ class DDPRunner(dl.SupervisedRunner):
         return dl.DistributedDataParallelEngine()
 
     def get_loaders(self) -> Mapping[str, DataLoader]:
-        assert self.config.datasets is not None
-        train_data = BDD100KDataset(**self.config.datasets["train"].asdict())
-        valid_data = BDD100KDataset(**self.config.datasets["train"].asdict())
+        train_valid_data = BDD100KDataset(**self.config.dataset.asdict())
+        train_data, valid_data = train_test_split(
+            train_valid_data, test_size=self.config.valid_size, seed=self.config.seed
+        )
         loaders = {
             "train": DataLoader(
                 train_data,
@@ -86,26 +88,22 @@ class DDPMultipleOutputModelRunner(  # pylint: disable=too-many-ancestors
 
 
 if __name__ == "__main__":
-    TRAIN_CONFIG, TRAIN_BATCH_SIZE, VALID_BATCH_SIZE = parse_train_args()
+    TRAIN_CONFIG = parse_train_args()
 
     SEGMENTATION_MODEL: Union[Unet, U2net]
 
+    MODEL_ARGS: Mapping[str, Any] = {
+        "in_channels": TRAIN_CONFIG.in_channels,
+        "out_channels": TRAIN_CONFIG.out_channels,
+        "big": TRAIN_CONFIG.big,
+        "max_pool": TRAIN_CONFIG.max_pool,
+        "bilinear": TRAIN_CONFIG.bilinear,
+    }
+
     if TRAIN_CONFIG.model is ModelType.UNET:
-        SEGMENTATION_MODEL = Unet(
-            in_channels=TRAIN_CONFIG.in_channels,
-            out_channels=TRAIN_CONFIG.out_channels,
-            big=TRAIN_CONFIG.big,
-            max_pool=TRAIN_CONFIG.max_pool,
-            bilinear=TRAIN_CONFIG.bilinear,
-        )
+        SEGMENTATION_MODEL = Unet(**MODEL_ARGS)
     else:
-        SEGMENTATION_MODEL = U2net(
-            in_channels=TRAIN_CONFIG.in_channels,
-            out_channels=TRAIN_CONFIG.out_channels,
-            big=TRAIN_CONFIG.big,
-            max_pool=TRAIN_CONFIG.max_pool,
-            bilinear=TRAIN_CONFIG.bilinear,
-        )
+        SEGMENTATION_MODEL = U2net(**MODEL_ARGS)
 
     OPTIMIZER = AdamW(SEGMENTATION_MODEL.parameters(), lr=TRAIN_CONFIG.learning_rate)
 
@@ -120,15 +118,10 @@ if __name__ == "__main__":
         else None
     )
 
-    TRAIN_DATASET_ARGS = DatasetArgs(
+    TRAIN_VALID_DATASET_ARGS = DatasetArgs(
         image_dir="/content/train/images",
         mask_dir="/content/train/roads",
         transforms=create_train_augmentation(),
-    )
-    VALID_DATASET_ARGS = DatasetArgs(
-        image_dir="/content/val/images",
-        mask_dir="/content/val/roads",
-        transforms=create_train_augmentation(is_train=False),
     )
 
     CALLBACKS = [
@@ -180,19 +173,27 @@ if __name__ == "__main__":
         )
 
     TRAIN_DDP_CONFIG = DDPConfig(
-        datasets={"train": TRAIN_DATASET_ARGS, "valid": VALID_DATASET_ARGS},
-        train_batch_size=TRAIN_BATCH_SIZE,
-        valid_batch_size=VALID_BATCH_SIZE,
+        dataset=TRAIN_VALID_DATASET_ARGS,
+        train_batch_size=TRAIN_CONFIG.train_batch_size,
+        valid_batch_size=TRAIN_CONFIG.valid_batch_size,
+        valid_size=TRAIN_CONFIG.valid_size,
+        seed=TRAIN_CONFIG.seed,
     )
 
     if TRAIN_CONFIG.ddp:
         RUNNER = DDPMultipleOutputModelRunner(TRAIN_DDP_CONFIG)
     else:
-        TRAIN_DATASET = BDD100KDataset(**TRAIN_DATASET_ARGS.asdict())
-        VALID_DATASET = BDD100KDataset(**VALID_DATASET_ARGS.asdict())
+        TRAIN_VALID_DATASET = BDD100KDataset(**TRAIN_VALID_DATASET_ARGS.asdict())
+        TRAIN_DATASET, VALID_DATASET = train_test_split(
+            TRAIN_VALID_DATASET, test_size=0.3, seed=TRAIN_CONFIG.seed
+        )
         TRAIN_CONFIG.loaders = {
-            "train": DataLoader(TRAIN_DATASET, batch_size=TRAIN_BATCH_SIZE, shuffle=True),
-            "valid": DataLoader(VALID_DATASET, batch_size=VALID_BATCH_SIZE, shuffle=False),
+            "train": DataLoader(
+                TRAIN_DATASET, batch_size=TRAIN_CONFIG.train_batch_size, shuffle=True
+            ),
+            "valid": DataLoader(
+                VALID_DATASET, batch_size=TRAIN_CONFIG.valid_batch_size, shuffle=False
+            ),
         }
         RUNNER = MultipleOutputModelRunner()
 
@@ -211,6 +212,9 @@ if __name__ == "__main__":
             "max_pool",
             "model",
             "out_channels",
+            "train_batch_size",
+            "valid_batch_size",
+            "valid_size",
         ]
     )
 

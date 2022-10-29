@@ -35,13 +35,11 @@ class DatasetArgs(AsDictDataclass):
 class DDPConfig(AsDictDataclass):
     """DDP special config for create dataloader in each process"""
 
-    datasets: Mapping[str, DatasetArgs]
+    dataset: DatasetArgs
     train_batch_size: int
     valid_batch_size: int
-
-    def __post_init__(self) -> None:
-        assert "train" in self.datasets
-        assert "valid" in self.datasets
+    seed: int
+    valid_size: float
 
 
 class ModelType(Enum):
@@ -62,20 +60,23 @@ class TrainConfig(AsDictDataclass):  # pylint: disable=too-many-instance-attribu
     max_pool: bool
     bilinear: bool
     learning_rate: float
-    logging: bool
     seed: int
+    train_batch_size: int
+    valid_batch_size: int
     num_epochs: int
+    logging: bool
+    verbose: bool
     logdir: str
-    resume: Optional[str] = None
+    valid_size: float
+    cpu: bool
+    fp16: bool
+    ddp: bool
+    resume: Optional[str]
     valid_loader: str = "valid"
     valid_metric: str = "loss"
-    verbose: bool = True
-    cpu: bool = True
-    fp16: bool = False
-    ddp: bool = False
-    count_batches: Optional[int] = None
     minimize_valid_metric: bool = True
-    loaders: Optional[Mapping[str, DataLoader]] = None
+    count_batches: Optional[int] = None  # for debugging
+    loaders: Optional[Mapping[str, DataLoader]] = None  # for ddp
 
 
 @dataclass
