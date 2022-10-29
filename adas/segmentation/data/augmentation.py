@@ -27,3 +27,6 @@ def create_train_augmentation(is_train: bool = True) -> Callable:
             ToTensorV2(),
         ]
     )
+
+
+__all__ = ["create_train_augmentation"]

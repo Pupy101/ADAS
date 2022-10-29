@@ -80,3 +80,6 @@ class InferenceConfig(AsDictDataclass):
     """Config for inference segmentation model"""
 
     pass  # pylint: disable=unnecessary-pass
+
+
+__all__ = ["CLASS_NAMES", "DatasetArgs", "DDPConfig", "ModelType", "TrainConfig", "InferenceConfig"]

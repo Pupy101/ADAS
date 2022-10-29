@@ -207,3 +207,6 @@ class Unet(ModuleWithDevice):
             headers_outputs.append(clf_head(decoder_batch))
         headers_outputs.append(self.main_clf_head(torch.cat(headers_outputs, dim=1)))
         return tuple(headers_outputs)
+
+
+__all__ = ["Unet"]

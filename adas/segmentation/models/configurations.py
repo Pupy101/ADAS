@@ -145,3 +145,20 @@ class ManyConfigs(TorchModuleConfig):
     def create(self) -> Module:
         """Initialize sequence of modules as torch.nn.Sequential"""
         return Sequential(*[c.create() for c in self.configs])
+
+
+__all__ = [
+    "DWConv2dConfig",
+    "DWConv2dSigmoidConfig",
+    "DWConv2dSigmoidConfig",
+    "DWConv2dBNLReLUConfig",
+    "DWConvT2dConfig",
+    "DWConvT2dBNLReLUConfig",
+    "DWConv2dSigmoidUpConfig",
+    "UpBlockConfig",
+    "UpBlockConfig",
+    "DownBlockConfig",
+    "RSUD1Config",
+    "RSUD5Config",
+    "ManyConfigs",
+]

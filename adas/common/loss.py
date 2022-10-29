@@ -26,3 +26,6 @@ class AggregatorManyOutputsLoss(Module):
         return sum(
             loss(o, targets) * c for loss in self.losses for o, c in zip(outputs, self.coeffs)
         )
+
+
+__all__ = ["AggregatorManyOutputsLoss"]

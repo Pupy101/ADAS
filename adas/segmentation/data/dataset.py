@@ -76,3 +76,6 @@ class BDD100KDataset(Dataset):
 
     def __len__(self):
         return len(self.pairs)
+
+
+__all__ = ["BDD100KDataset"]

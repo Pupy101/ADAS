@@ -446,3 +446,17 @@ class RSUD5(nn.Module):  # pylint: disable=too-many-instance-attributes
             torch.cat([preprocessed_batch_2, dil_out_5], dim=1)
         )
         return post_process_batch + preprocessed_batch_1
+
+
+__all__ = [
+    "DWConv2d",
+    "DWConv2dSigmoid",
+    "DWConv2dBNLReLU",
+    "DWConvT2d",
+    "DWConvT2dBNLReLU",
+    "DWConv2dSigmoidUp",
+    "UpBlock",
+    "DownBlock",
+    "RSUD1",
+    "RSUD5",
+]
