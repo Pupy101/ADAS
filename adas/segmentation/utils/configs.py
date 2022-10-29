@@ -61,6 +61,8 @@ class TrainConfig(AsDictDataclass):  # pylint: disable=too-many-instance-attribu
     big: bool
     max_pool: bool
     bilinear: bool
+    learning_rate: float
+    logging: bool
     seed: int
     num_epochs: int
     logdir: str
