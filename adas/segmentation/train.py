@@ -121,13 +121,13 @@ if __name__ == "__main__":
     )
 
     TRAIN_DATASET_ARGS = DatasetArgs(
-        image_dir="/Users/19891176/Downloads/dataset/train/images",
-        mask_dir="/Users/19891176/Downloads/dataset/train/roads",
+        image_dir="/content/train/images",
+        mask_dir="/content/train/roads",
         transforms=create_train_augmentation(),
     )
     VALID_DATASET_ARGS = DatasetArgs(
-        image_dir="/Users/19891176/Downloads/dataset/val/images",
-        mask_dir="/Users/19891176/Downloads/dataset/val/roads",
+        image_dir="/content/val/images",
+        mask_dir="/content/val/roads",
         transforms=create_train_augmentation(is_train=False),
     )
 
