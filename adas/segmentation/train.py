@@ -113,7 +113,11 @@ if __name__ == "__main__":
     )
 
     LOGGER = (
-        {"wandb": WandbLogger(project="ADAS", name="Unet_test_run", log_batch_metrics=True)}
+        {
+            "wandb": WandbLogger(
+                project="ADAS", name=TRAIN_CONFIG.model.value, log_batch_metrics=True
+            )
+        }
         if TRAIN_CONFIG.logging
         else None
     )
