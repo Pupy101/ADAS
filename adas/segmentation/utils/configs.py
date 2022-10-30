@@ -4,9 +4,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Union
 
 CLASS_NAMES = ["main_road", "backgroud"]
-INPUTS_KEYS = ["last_probas", "agg_probas"]
-TARGETS_KEYS = ["targets", "targets"]
-PREFIXES = ["last_", "agg_"]
 
 
 @dataclass

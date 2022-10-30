@@ -10,9 +10,6 @@ from catalyst.loggers.wandb import WandbLogger
 from adas.segmentation.models import U2net, Unet
 from adas.segmentation.utils.configs import (
     CLASS_NAMES,
-    INPUTS_KEYS,
-    PREFIXES,
-    TARGETS_KEYS,
     EvaluationConfig,
     InferenceConfig,
     ModelType,
@@ -40,7 +37,6 @@ class MultipleOutputModelRunner(dl.SupervisedRunner):
             **batch,
             "probas": probas,
             "last_probas": probas[-2],
-            "agg_probas": probas[-1],
         }
 
 
@@ -64,25 +60,13 @@ def create_callbacks(  # pylint: disable=too-many-arguments
         ),
     ]
     if compute_iou:
-        for input_key, targets_key, prefix in zip(INPUTS_KEYS, TARGETS_KEYS, PREFIXES):
-            callbacks.append(
-                dl.IOUCallback(
-                    input_key=input_key,
-                    target_key=targets_key,
-                    prefix=prefix,
-                    class_names=CLASS_NAMES,
-                )
-            )
+        callbacks.append(
+            dl.IOUCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES)
+        )
     if compute_dice:
-        for input_key, targets_key, prefix in zip(INPUTS_KEYS, TARGETS_KEYS, PREFIXES):
-            callbacks.append(
-                dl.DiceCallback(
-                    input_key=input_key,
-                    target_key=targets_key,
-                    prefix=prefix,
-                    class_names=CLASS_NAMES,
-                )
-            )
+        callbacks.append(
+            dl.DiceCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES)
+        )
     if profiling:
         callbacks.append(dl.ProfilerCallback(loader_key="valid"))
     if num_batch_steps is not None:
