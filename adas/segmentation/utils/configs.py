@@ -30,8 +30,8 @@ class ModelType(Enum):
 
 
 COEFFICIENTS = {
-    ModelType.U2NET: (0.01, 0.05, 0.07, 0.2, 0.5, 1, 0.5),
-    ModelType.UNET: (0.01, 0.05, 0.2, 0.5, 1, 0.5),
+    ModelType.U2NET: (0.01, 0.05, 0.07, 0.2, 0.4, 1),
+    ModelType.UNET: (0.01, 0.05, 0.2, 0.4, 1),
 }
 
 
