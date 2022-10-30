@@ -84,12 +84,6 @@ class U2net(ModuleWithDevice):
             ),
             DWConv2dSigmoidConfig(in_channels=conf[-1].out_channels, out_channels=out_channels),
         ]
-        main_clf_head = DWConv2dSigmoidConfig(
-            in_channels=out_channels * 6,
-            out_channels=out_channels,
-            kernel_size=1,
-            padding=0,
-        )
 
         # encoder
         self.encoders_stages = nn.ModuleList([conf.create() for conf in conf[:5]])
@@ -101,8 +95,6 @@ class U2net(ModuleWithDevice):
         self.upsample_stages = nn.ModuleList([conf.create() for conf in up_conf])
         # clf heads
         self.clf_heads = nn.ModuleList([conf.create() for conf in clf_heads_config])
-        # main clf head
-        self.main_clf_head = main_clf_head.create()
 
     def forward(self, batch: Tensor) -> Tuple[Tensor, ...]:
         """Forward step of module"""
@@ -119,6 +111,4 @@ class U2net(ModuleWithDevice):
             outputs_decoder.append(batch)
         for decoder_batch, clf_head in zip(outputs_decoder, self.clf_heads):
             headers_output.append(clf_head(decoder_batch))
-        main_output = self.main_clf_head(torch.cat(headers_output, dim=1))
-        headers_output.append(main_output)
         return tuple(headers_output)

@@ -174,12 +174,6 @@ class Unet(ModuleWithDevice):
                 in_channels=conf[-1].configs[-1].out_channels, out_channels=out_channels
             ),
         ]
-        main_clf_head = DWConv2dSigmoidConfig(
-            in_channels=out_channels * 5,
-            out_channels=out_channels,
-            kernel_size=1,
-            padding=0,
-        )
 
         self.encoder_stages = nn.ModuleList([c.create() for c in conf[:4]])
         self.down_stages = nn.ModuleList([c.create() for c in down_conf])
@@ -187,7 +181,6 @@ class Unet(ModuleWithDevice):
         self.up_stages = nn.ModuleList([c.create() for c in up_conf])
         self.decoder_stages = nn.ModuleList([c.create() for c in conf[-4:]])
         self.clf_heads = nn.ModuleList([conf.create() for conf in clf_heads_config])
-        self.main_clf_head = main_clf_head.create()
 
     def forward(self, batch: Tensor) -> Tuple[Tensor, ...]:
         """Forward step of module"""
@@ -205,5 +198,4 @@ class Unet(ModuleWithDevice):
             decoder_outputs.append(batch)
         for decoder_batch, clf_head in zip(decoder_outputs, self.clf_heads):
             headers_outputs.append(clf_head(decoder_batch))
-        headers_outputs.append(self.main_clf_head(torch.cat(headers_outputs, dim=1)))
         return tuple(headers_outputs)
