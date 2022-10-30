@@ -1,11 +1,12 @@
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Set, Union
-
-from torch.utils.data import DataLoader
+from typing import Any, Dict, Iterable, Optional, Union
 
 CLASS_NAMES = ["main_road", "backgroud"]
+INPUTS_KEYS = ["last_probas", "agg_probas"]
+TARGETS_KEYS = ["targets", "targets"]
+PREFIXES = ["last_", "agg_"]
 
 
 @dataclass
@@ -21,27 +22,6 @@ class AsDictDataclass:
         return dictionary
 
 
-@dataclass
-class DatasetArgs(AsDictDataclass):
-    """Params for create torch Dataset (need for DDP)"""
-
-    image_dir: Union[str, Path]
-    mask_dir: Union[str, Path]
-    transforms: Callable
-    image_extensions: Optional[Set[str]] = None
-
-
-@dataclass
-class DDPConfig(AsDictDataclass):
-    """DDP special config for create dataloader in each process"""
-
-    dataset: DatasetArgs
-    train_batch_size: int
-    valid_batch_size: int
-    seed: int
-    valid_size: float
-
-
 class ModelType(Enum):
     """Acceptable models types"""
 
@@ -49,9 +29,15 @@ class ModelType(Enum):
     U2NET = "U2NET"
 
 
+COEFFICIENTS = {
+    ModelType.U2NET: (0.01, 0.05, 0.07, 0.2, 0.5, 1, 0.5),
+    ModelType.UNET: (0.01, 0.05, 0.2, 0.5, 1, 0.5),
+}
+
+
 @dataclass
-class TrainConfig(AsDictDataclass):  # pylint: disable=too-many-instance-attributes
-    """Config for train segmentation model"""
+class ModelParameters:
+    """Base segmentation model parameters"""
 
     model: ModelType
     in_channels: int
@@ -59,31 +45,54 @@ class TrainConfig(AsDictDataclass):  # pylint: disable=too-many-instance-attribu
     big: bool
     max_pool: bool
     bilinear: bool
-    learning_rate: float
-    seed: int
-    train_batch_size: int
-    valid_batch_size: int
-    num_epochs: int
-    logging: bool
-    verbose: bool
-    logdir: str
-    valid_size: float
-    cpu: bool
-    fp16: bool
-    ddp: bool
-    resume: Optional[str]
-    valid_loader: str = "valid"
-    valid_metric: str = "loss"
-    minimize_valid_metric: bool = True
-    count_batches: Optional[int] = None  # for debugging
-    loaders: Optional[Mapping[str, DataLoader]] = None  # for ddp
 
 
 @dataclass
-class InferenceConfig(AsDictDataclass):
+class TrainConfig(AsDictDataclass, ModelParameters):  # pylint: disable=too-many-instance-attributes
+    """Config for train segmentation model"""
+
+    # dataset parameters
+    image_dir: Union[str, Path]
+    mask_dir: Union[str, Path]
+    train_batch_size: int
+    valid_batch_size: int
+    valid_size: float
+    # training parameters
+    learning_rate: float
+    seed: int
+    num_epochs: int
+    num_batch_steps: Optional[int]
+    cpu: bool
+    fp16: bool
+    resume: Optional[str]
+    # logging parameters
+    logging: bool
+    verbose: bool
+    logdir: str
+
+
+@dataclass
+class EvaluationConfig(  # pylint: disable=too-many-instance-attributes
+    AsDictDataclass, ModelParameters
+):
+    """Config for evaluation segmentation model"""
+
+    # dataset parameters
+    image_dir: Union[str, Path]
+    mask_dir: Union[str, Path]
+    eval_batch_size: int
+    # eval parameters
+    cpu: bool
+    fp16: bool
+    resume: Optional[str]
+    # logging parameters
+    logging: bool
+    verbose: bool
+    logdir: str
+
+
+@dataclass
+class InferenceConfig(ModelParameters):
     """Config for inference segmentation model"""
 
     pass  # pylint: disable=unnecessary-pass
-
-
-__all__ = ["CLASS_NAMES", "DatasetArgs", "DDPConfig", "ModelType", "TrainConfig", "InferenceConfig"]

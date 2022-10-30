@@ -1,19 +1,17 @@
-from typing import Tuple, TypeVar
+import random
+from typing import List, Tuple, TypeVar
 
-from torch import Generator
-from torch.utils.data import Dataset, Subset, random_split
-
-CustomDataset = TypeVar("CustomDataset", bound=Dataset)
+T = TypeVar("T")
 
 
-def train_test_split(
-    dataset: CustomDataset, test_size: float, seed: int = 1234
-) -> Tuple[Subset, Subset]:
-    assert 0 < test_size < 1, "Test size must be in interval (0, 1)"
-    dataset_length = len(dataset)  # type: ignore
-    test_size = round(dataset_length * test_size)
-    train_size = dataset_length - test_size
-    train, test = random_split(
-        dataset, lengths=[train_size, test_size], generator=Generator().manual_seed(seed)
-    )
-    return train, test
+def train_test_split(data: List[T], test_size: float, seed: int = 1234) -> Tuple[List[T], List[T]]:
+    """Split sequence of items on train/val subsequences"""
+    random.seed(seed)
+    train_data: List[T] = []
+    test_data: List[T] = []
+    for item in data:
+        if random.random() < test_size:
+            test_data.append(item)
+        else:
+            train_data.append(item)
+    return train_data, test_data

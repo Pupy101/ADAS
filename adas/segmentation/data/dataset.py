@@ -23,36 +23,34 @@ class BDD100KDataset(Dataset):
     https://bair.berkeley.edu/blog/2018/05/30/bdd/
     """
 
-    def __init__(
-        self,
-        image_dir: Union[str, Path],
-        mask_dir: Union[str, Path],
-        transforms: Callable,
-        image_extensions: Optional[Set[str]] = None,
-    ) -> None:
+    def __init__(self, data: List[ImageAndMask], transforms: Callable) -> None:
         """Dataset init"""
-        self.image_dir = Path(image_dir)
-        self.mask_dir = Path(mask_dir)
-        if image_extensions is None:
-            image_extensions = {".png", ".jpg"}
-        self.img_exts = image_extensions
-        self.pairs = self.found_images()
+        self.data = data
         self.transforms = transforms
 
-    def found_images(self) -> List[ImageAndMask]:
+    @staticmethod
+    def found_images(
+        image_dir: Union[str, Path],
+        mask_dir: Union[str, Path],
+        image_extensions: Optional[Set[str]] = None,
+    ) -> List[ImageAndMask]:
         """Finding pairs by name and return that pairs from image and mask folder"""
+        if image_extensions is None:
+            image_extensions = {".png", ".jpg"}
+        image_dir = Path(image_dir)
+        mask_dir = Path(mask_dir)
         img2path: Dict[str, Path] = {}
         msk2path: Dict[str, Path] = {}
-        for file in self.image_dir.rglob("*"):
-            if file.suffix in self.img_exts:
+        for file in image_dir.rglob("*"):
+            if file.suffix in image_extensions:
                 img2path[file.stem] = file
-        for file in self.mask_dir.rglob("*"):
-            if file.suffix in self.img_exts:
+        for file in mask_dir.rglob("*"):
+            if file.suffix in image_extensions:
                 msk2path[file.stem] = file
-        pairs: List[ImageAndMask] = []
+        data: List[ImageAndMask] = []
         for key in sorted(img2path.keys() & msk2path.keys()):
-            pairs.append(ImageAndMask(image=img2path[key], mask=msk2path[key]))
-        return pairs
+            data.append(ImageAndMask(image=img2path[key], mask=msk2path[key]))
+        return data
 
     @staticmethod
     def load_image_and_mask(
@@ -62,7 +60,7 @@ class BDD100KDataset(Dataset):
         return np.array(Image.open(image_and_mask.image)), np.array(Image.open(image_and_mask.mask))
 
     def __getitem__(self, ind: int) -> Dict[str, Tensor]:
-        img, msk = self.load_image_and_mask(self.pairs[ind])
+        img, msk = self.load_image_and_mask(self.data[ind])
 
         data = self.transforms(image=img, mask=msk)
         image: Tensor = data["image"]
@@ -75,7 +73,4 @@ class BDD100KDataset(Dataset):
         return {"features": image, "targets": one_hot_mask.long()}
 
     def __len__(self):
-        return len(self.pairs)
-
-
-__all__ = ["BDD100KDataset"]
+        return len(self.data)

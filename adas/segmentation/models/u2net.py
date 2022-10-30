@@ -122,6 +122,3 @@ class U2net(ModuleWithDevice):
         main_output = self.main_clf_head(torch.cat(headers_output, dim=1))
         headers_output.append(main_output)
         return tuple(headers_output)
-
-
-__all__ = ["U2net"]

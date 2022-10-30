@@ -4,7 +4,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 
-def create_train_augmentation(is_train: bool = True) -> Callable:
+def create_augmentation(is_train: bool) -> Callable:
     """Creation augmentation for train or validation"""
     if is_train:
         return A.Compose(
@@ -27,6 +27,3 @@ def create_train_augmentation(is_train: bool = True) -> Callable:
             ToTensorV2(),
         ]
     )
-
-
-__all__ = ["create_train_augmentation"]
