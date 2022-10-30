@@ -1,0 +1,7 @@
+[FORMAT]
+max-line-length=100
+[IMPORTS]
+ignored-modules=torch
+[MASTER]
+disable=
+    C0114, # missing-module-docstring
