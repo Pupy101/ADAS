@@ -27,8 +27,8 @@ class ModelType(Enum):
 
 
 COEFFICIENTS = {
-    ModelType.U2NET: (0.01, 0.05, 0.07, 0.2, 0.4, 1),
-    ModelType.UNET: (0.01, 0.05, 0.2, 0.4, 1),
+    ModelType.UNET: (0.01, 0.05, 0.1, 0.4, 1),
+    ModelType.U2NET: (0.001, 0.01, 0.05, 0.1, 0.4, 1),
 }
 
 
@@ -66,6 +66,8 @@ class TrainConfig(AsDictDataclass, ModelParameters):  # pylint: disable=too-many
     logging: bool
     verbose: bool
     logdir: str
+    name: str
+    profile: bool
 
 
 @dataclass
@@ -86,6 +88,8 @@ class EvaluationConfig(  # pylint: disable=too-many-instance-attributes
     logging: bool
     verbose: bool
     logdir: str
+    name: str
+    profile: bool
 
 
 @dataclass

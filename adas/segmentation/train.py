@@ -10,9 +10,9 @@ from adas.segmentation.utils.common import (
     create_callbacks,
     create_logger,
     create_model,
-    parse_train_args,
 )
 from adas.segmentation.utils.configs import COEFFICIENTS
+from adas.segmentation.utils.parser import parse_train_args
 
 if __name__ == "__main__":
 
@@ -29,7 +29,11 @@ if __name__ == "__main__":
     LOGGER = create_logger(CONFIG)
 
     CALLBACKS = create_callbacks(
-        resume=CONFIG.resume, logdir=CONFIG.logdir, num_batch_steps=CONFIG.num_batch_steps
+        logdir=CONFIG.logdir,
+        resume=CONFIG.resume,
+        profile=CONFIG.profile,
+        num_batch_steps=CONFIG.num_batch_steps,
+        num_epoch_steps=CONFIG.num_epochs,
     )
 
     TRAIN_DATA, VALID_DATA = train_test_split(
@@ -40,7 +44,7 @@ if __name__ == "__main__":
     TRAIN_DATASET = BDD100KDataset(data=TRAIN_DATA, transforms=create_augmentation(is_train=True))
     VALID_DATASET = BDD100KDataset(data=VALID_DATA, transforms=create_augmentation(is_train=False))
     LOADERS = {
-        "train": DataLoader(TRAIN_DATASET, batch_size=CONFIG.train_batch_size, shuffle=True),
+        "train": DataLoader(TRAIN_DATASET, batch_size=CONFIG.train_batch_size, shuffle=False),
         "valid": DataLoader(VALID_DATASET, batch_size=CONFIG.valid_batch_size, shuffle=False),
     }
 
