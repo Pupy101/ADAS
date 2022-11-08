@@ -68,7 +68,7 @@ class BDD100KDataset(Dataset):
 
         one_hot_mask = torch.zeros(2, mask.size(0), mask.size(1))
         one_hot_mask[0, mask == 0] = 1  # main road
-        one_hot_mask[1, mask == 1] = 1  # backgroud
+        one_hot_mask[1, mask == 2] = 1  # backgroud
 
         return {"features": image, "targets": one_hot_mask.long()}
 
