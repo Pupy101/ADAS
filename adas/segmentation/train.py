@@ -1,4 +1,4 @@
-from catalyst.contrib.losses import DiceLoss
+from catalyst.contrib.losses import DiceLoss, IoULoss
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
@@ -23,7 +23,9 @@ if __name__ == "__main__":
     OPTIMIZER = AdamW(MODEL.parameters(), lr=CONFIG.learning_rate)
 
     CRITERION = AggregatorManyOutputsLoss(
-        losses=DiceLoss(class_dim=CONFIG.out_channels), coefficients=COEFFICIENTS[CONFIG.model]
+        losses=(IoULoss(class_dim=CONFIG.out_channels), DiceLoss(class_dim=CONFIG.out_channels)),
+        coefficients=COEFFICIENTS[CONFIG.model],
+        losses_coefficients=(0.6, 0.4),
     )
 
     LOGGER = create_logger(CONFIG)
