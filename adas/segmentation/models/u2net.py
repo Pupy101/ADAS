@@ -8,10 +8,161 @@ from .configurations import (
     DownBlockConfig,
     DWConv2dSigmoidConfig,
     DWConv2dSigmoidUpConfig,
+    ModelSize,
     RSUD1Config,
     RSUD5Config,
     UpBlockConfig,
 )
+
+
+class U2netEncoder(ModuleWithDevice):
+    """U2net encoder"""
+
+    def __init__(self, in_channels: int, size: ModelSize, max_pool: bool) -> None:
+        super().__init__()
+        self.size = size
+        shapes: Tuple[int, int, int, int, int]
+        if size is ModelSize.BIG:
+            shapes = (32, 64, 128, 256, 512)
+        elif size is ModelSize.MEDIUM:
+            shapes = (16, 32, 64, 128, 256)
+        elif size is ModelSize.SMALL:
+            shapes = (8, 16, 32, 64, 128)
+        else:
+            raise ValueError(f"Strange size for U2netEncoder: {size}")
+        configuration: List[Union[RSUD1Config, RSUD5Config]] = [
+            RSUD1Config(in_channels=in_channels, mid_channels=shapes[0], out_channels=shapes[1]),
+            RSUD1Config(
+                in_channels=shapes[1], mid_channels=shapes[0], out_channels=shapes[2], depth=4
+            ),
+            RSUD1Config(
+                in_channels=shapes[2], mid_channels=shapes[1], out_channels=shapes[3], depth=3
+            ),
+            RSUD1Config(
+                in_channels=shapes[3], mid_channels=shapes[2], out_channels=shapes[4], depth=2
+            ),
+            RSUD5Config(in_channels=shapes[4], mid_channels=shapes[3], out_channels=shapes[4]),
+        ]
+        downsample_configuration: List[DownBlockConfig] = [
+            DownBlockConfig(in_channels=c.out_channels, max_pool=max_pool) for c in configuration
+        ]
+        self.encoders_stages = nn.ModuleList([c.create() for c in configuration])
+        self.downsample_stages = nn.ModuleList([c.create() for c in downsample_configuration])
+
+    def forward(self, batch: Tensor) -> Tuple[Tensor, List[Tensor]]:
+        """Forward step of module"""
+        encoder_outputs: List[Tensor] = []
+        for encoder_stage, downsample_stage in zip(self.encoders_stages, self.downsample_stages):
+            batch = downsample_stage(encoder_stage(batch))
+            encoder_outputs.append(batch)
+        return batch, encoder_outputs
+
+
+class U2netBottleneck(ModuleWithDevice):
+    """U2net bottleneck"""
+
+    def __init__(self, size: ModelSize) -> None:
+        super().__init__()
+        shapes: Tuple[int, int]
+        if size is ModelSize.BIG:
+            shapes = (512, 256)
+        elif size is ModelSize.MEDIUM:
+            shapes = (256, 128)
+        elif size is ModelSize.SMALL:
+            shapes = (128, 64)
+        else:
+            raise ValueError(f"Strange size for U2netBottleneck: {size}")
+        configuration = RSUD5Config(
+            in_channels=shapes[0], mid_channels=shapes[1], out_channels=shapes[0]
+        )
+        self.bottleneck = configuration.create()
+
+    def forward(self, batch: Tensor) -> Tensor:
+        """Forward step of module"""
+        return self.bottleneck(batch)
+
+
+class U2netDecoder(ModuleWithDevice):
+    """U2net decoder"""
+
+    def __init__(self, size: ModelSize, bilinear: bool) -> None:
+        super().__init__()
+        if size is ModelSize.BIG:
+            shapes = (1024, 512, 256, 128, 64, 32, 16)
+        elif size is ModelSize.MEDIUM:
+            shapes = (512, 256, 128, 64, 32, 16, 8)
+        elif size is ModelSize.SMALL:
+            shapes = (256, 128, 64, 32, 16, 8, 4)
+        else:
+            raise ValueError(f"Strange size for U2netDecoder: {size}")
+        configuration: List[Union[RSUD5Config, RSUD1Config]] = [
+            RSUD5Config(in_channels=shapes[0], mid_channels=shapes[2], out_channels=shapes[1]),
+            RSUD1Config(
+                in_channels=shapes[0], mid_channels=shapes[3], out_channels=shapes[2], depth=2
+            ),
+            RSUD1Config(
+                in_channels=shapes[1], mid_channels=shapes[4], out_channels=shapes[3], depth=3
+            ),
+            RSUD1Config(
+                in_channels=shapes[2], mid_channels=shapes[5], out_channels=shapes[4], depth=4
+            ),
+            RSUD1Config(in_channels=shapes[3], mid_channels=shapes[6], out_channels=shapes[4]),
+        ]
+
+        upsample_configuration: List[UpBlockConfig] = [
+            UpBlockConfig(in_channels=c.in_channels, bilinear=bilinear) for c in configuration
+        ]
+        self.decoders_stages = nn.ModuleList([conf.create() for conf in configuration])
+        self.upsample_stages = nn.ModuleList([conf.create() for conf in upsample_configuration])
+
+    def forward(self, batch: Tensor, encoder_outputs) -> List[Tensor]:
+        """Forward step of module"""
+        decoder_outputs = []
+        for decoder_stage, upsample_stage, encoder_output in zip(
+            self.decoders_stages, self.upsample_stages, encoder_outputs[::-1]
+        ):
+            batch = decoder_stage(upsample_stage(torch.cat([batch, encoder_output], dim=1)))
+            decoder_outputs.append(batch)
+        return decoder_outputs
+
+
+class U2netPredictHeads(ModuleWithDevice):
+    """U2net predict heads"""
+
+    def __init__(self, out_channels: int, size: ModelSize) -> None:
+        super().__init__()
+        in_channels: Tuple[int, int, int, int, int]
+        if size is ModelSize.BIG:
+            in_channels = (512, 256, 128, 64, 64)
+        elif size is ModelSize.MEDIUM:
+            in_channels = (256, 128, 64, 32, 32)
+        elif size is ModelSize.SMALL:
+            in_channels = (128, 64, 32, 16, 16)
+        else:
+            raise ValueError(f"Strange size for U2netPredictHead: {size}")
+        configuration: List[Union[DWConv2dSigmoidUpConfig, DWConv2dSigmoidConfig]] = [
+            DWConv2dSigmoidUpConfig(
+                in_channels=in_channels[-5], out_channels=out_channels, scale=16
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=in_channels[-4], out_channels=out_channels, scale=8
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=in_channels[-3], out_channels=out_channels, scale=4
+            ),
+            DWConv2dSigmoidUpConfig(
+                in_channels=in_channels[-2], out_channels=out_channels, scale=2
+            ),
+            DWConv2dSigmoidConfig(in_channels=in_channels[-1], out_channels=out_channels),
+        ]
+        self.heads = nn.ModuleList([c.create() for c in configuration])
+
+    def forward(self, decoder_outputs: List[Tensor]) -> Tuple[Tensor, ...]:
+        """Forward step of module"""
+        headers_output: List[Tensor] = []
+        for decoder_batch, clf_head in zip(decoder_outputs, self.heads):
+            headers_output.append(clf_head(decoder_batch))
+        return tuple(headers_output)
 
 
 class U2net(ModuleWithDevice):
@@ -22,93 +173,18 @@ class U2net(ModuleWithDevice):
     """
 
     def __init__(  # pylint: disable=too-many-arguments
-        self,
-        in_channels: int,
-        out_channels: int,
-        big: bool = True,
-        max_pool: bool = True,
-        bilinear: bool = True,
+        self, in_channels: int, out_channels: int, size: ModelSize, max_pool: bool, bilinear: bool
     ):
         """Module init"""
         super().__init__()
-        conf: List[Union[RSUD1Config, RSUD5Config]]
-        if big:
-            conf = [
-                RSUD1Config(in_channels=in_channels, mid_channels=32, out_channels=64),
-                RSUD1Config(in_channels=64, mid_channels=32, out_channels=128, depth=4),
-                RSUD1Config(in_channels=128, mid_channels=64, out_channels=256, depth=3),
-                RSUD1Config(in_channels=256, mid_channels=128, out_channels=512, depth=2),
-                RSUD5Config(in_channels=512, mid_channels=256, out_channels=512),
-                RSUD5Config(in_channels=512, mid_channels=256, out_channels=512),
-                RSUD5Config(in_channels=1024, mid_channels=256, out_channels=512),
-                RSUD1Config(in_channels=1024, mid_channels=128, out_channels=256, depth=2),
-                RSUD1Config(in_channels=512, mid_channels=64, out_channels=128, depth=3),
-                RSUD1Config(in_channels=256, mid_channels=32, out_channels=64, depth=4),
-                RSUD1Config(in_channels=128, mid_channels=16, out_channels=64),
-            ]
-        else:
-            conf = [
-                RSUD1Config(in_channels=in_channels, mid_channels=4, out_channels=16),
-                RSUD1Config(in_channels=16, mid_channels=8, out_channels=32, depth=4),
-                RSUD1Config(in_channels=32, mid_channels=16, out_channels=64, depth=3),
-                RSUD1Config(in_channels=64, mid_channels=32, out_channels=128, depth=2),
-                RSUD5Config(in_channels=128, mid_channels=64, out_channels=128),
-                RSUD5Config(in_channels=128, mid_channels=64, out_channels=128),
-                RSUD5Config(in_channels=256, mid_channels=64, out_channels=128),
-                RSUD1Config(in_channels=256, mid_channels=32, out_channels=64, depth=2),
-                RSUD1Config(in_channels=128, mid_channels=16, out_channels=32, depth=3),
-                RSUD1Config(in_channels=64, mid_channels=8, out_channels=16, depth=4),
-                RSUD1Config(in_channels=32, mid_channels=4, out_channels=16),
-            ]
-        down_conf: List[DownBlockConfig] = [
-            DownBlockConfig(in_channels=c.out_channels, max_pool=max_pool) for c in conf[:5]
-        ]
-        up_conf: List[UpBlockConfig] = [
-            UpBlockConfig(in_channels=c.in_channels, bilinear=bilinear) for c in conf[-5:]
-        ]
-        clf_heads_config: List[Union[DWConv2dSigmoidConfig, DWConv2dSigmoidUpConfig]] = [
-            DWConv2dSigmoidUpConfig(
-                in_channels=conf[-6].out_channels, out_channels=out_channels, scale=32
-            ),
-            DWConv2dSigmoidUpConfig(
-                in_channels=conf[-5].out_channels, out_channels=out_channels, scale=16
-            ),
-            DWConv2dSigmoidUpConfig(
-                in_channels=conf[-4].out_channels, out_channels=out_channels, scale=8
-            ),
-            DWConv2dSigmoidUpConfig(
-                in_channels=conf[-3].out_channels, out_channels=out_channels, scale=4
-            ),
-            DWConv2dSigmoidUpConfig(
-                in_channels=conf[-2].out_channels, out_channels=out_channels, scale=2
-            ),
-            DWConv2dSigmoidConfig(in_channels=conf[-1].out_channels, out_channels=out_channels),
-        ]
-
-        # encoder
-        self.encoders_stages = nn.ModuleList([conf.create() for conf in conf[:5]])
-        self.downsample_stages = nn.ModuleList([conf.create() for conf in down_conf])
-        # dilation stage
-        self.dilation_stage = conf[5].create()
-        # decoder
-        self.decoders_stages = nn.ModuleList([conf.create() for conf in conf[-5:]])
-        self.upsample_stages = nn.ModuleList([conf.create() for conf in up_conf])
-        # clf heads
-        self.clf_heads = nn.ModuleList([conf.create() for conf in clf_heads_config])
+        self.encoder = U2netEncoder(in_channels=in_channels, size=size, max_pool=max_pool)
+        self.bottleneck = U2netBottleneck(size=size)
+        self.decoder = U2netDecoder(size=size, bilinear=bilinear)
+        self.heads = U2netPredictHeads(out_channels=out_channels, size=size)
 
     def forward(self, batch: Tensor) -> Tuple[Tensor, ...]:
-        """Forward step of module"""
-        outputs_encoder, outputs_decoder, headers_output = [], [], []
-        for encoder_stage, downsample_stage in zip(self.encoders_stages, self.downsample_stages):
-            batch = downsample_stage(encoder_stage(batch))
-            outputs_encoder.append(batch)
-        batch = self.dilation_stage(batch)
-        outputs_decoder.append(batch)
-        for decoder_stage, upsample_stage, encoder_batch in zip(
-            self.decoders_stages, self.upsample_stages, outputs_encoder[::-1]
-        ):
-            batch = decoder_stage(upsample_stage(torch.cat([batch, encoder_batch], dim=1)))
-            outputs_decoder.append(batch)
-        for decoder_batch, clf_head in zip(outputs_decoder, self.clf_heads):
-            headers_output.append(clf_head(decoder_batch))
-        return tuple(headers_output)
+        """Forward step of U2net"""
+        batch, encoder_outputs = self.encoder.forward(batch=batch)
+        batch = self.bottleneck.forward(batch=batch)
+        decoder_outputs = self.decoder.forward(batch=batch, encoder_outputs=encoder_outputs)
+        return self.heads.forward(decoder_outputs=decoder_outputs)
