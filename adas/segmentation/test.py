@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     LOGGER = create_logger(CONFIG)
 
-    CALLBACKS = create_callbacks(logdir=CONFIG.logdir, resume=CONFIG.resume, profile=CONFIG.profile)
+    CALLBACKS = create_callbacks(CONFIG)
 
     EVAL_DATASET = BDD100KDataset(
         data=BDD100KDataset.found_images(image_dir=CONFIG.image_dir, mask_dir=CONFIG.mask_dir),

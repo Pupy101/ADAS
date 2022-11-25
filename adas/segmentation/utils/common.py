@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
 from catalyst import dl
 from catalyst.core.callback import Callback
@@ -14,6 +14,8 @@ from adas.segmentation.utils.configs import (
     ModelType,
     TrainConfig,
 )
+
+Config = TypeVar("Config", TrainConfig, EvaluationConfig, InferenceConfig)
 
 
 class MultipleOutputModelRunner(dl.SupervisedRunner):
@@ -32,25 +34,19 @@ class MultipleOutputModelRunner(dl.SupervisedRunner):
 
     def handle_batch(self, batch: Mapping[str, Any]):
         probas = self.forward(batch)["probas"]
-        self.batch = {
-            **batch,
-            "probas": probas,
-            "last_probas": probas[-2],
-        }
+        self.batch = {**batch, "probas": probas, "last_probas": probas[-1]}
 
 
-def create_callbacks(  # pylint: disable=too-many-arguments
-    logdir: str,
-    resume: Optional[str],
-    profile: bool,
-    num_batch_steps: Optional[int] = None,
-    num_epoch_steps: Optional[int] = None,
-) -> List[Callback]:
+def create_callbacks(config: Config) -> List[Callback]:
     """Create callback for catalyst runner"""
     callbacks: List[Callback]
     callbacks = [
         dl.CheckpointCallback(
-            logdir=logdir, loader_key="valid", metric_key="loss", topk=3, resume_model=resume
+            logdir=config.logdir,
+            loader_key="valid",
+            metric_key="loss",
+            topk=3,
+            resume_model=config.resume,
         ),
         dl.EarlyStoppingCallback(
             loader_key="valid", metric_key="loss", minimize=True, patience=3, min_delta=1e-2
@@ -58,11 +54,17 @@ def create_callbacks(  # pylint: disable=too-many-arguments
         dl.IOUCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES),
         dl.DiceCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES),
     ]
-    if profile:
+    if isinstance(config, (TrainConfig, EvaluationConfig)) and config.profile:
         callbacks.append(dl.ProfilerCallback(loader_key="valid"))
-    if num_batch_steps is not None and num_epoch_steps is not None:
+    if (
+        isinstance(config, TrainConfig)
+        and config.num_batch_steps is not None
+        and config.num_epoch_steps is not None
+    ):
         callbacks.append(
-            dl.CheckRunCallback(num_batch_steps=num_batch_steps, num_epoch_steps=num_epoch_steps)
+            dl.CheckRunCallback(
+                num_batch_steps=config.num_batch_steps, num_epoch_steps=config.num_epoch_steps
+            )
         )
     return callbacks
 
@@ -74,7 +76,7 @@ def create_model(
     kwargs: Mapping[str, Any] = {
         "in_channels": config.in_channels,
         "out_channels": config.out_channels,
-        "big": config.big,
+        "size": config.size,
         "max_pool": config.max_pool,
         "bilinear": config.bilinear,
     }

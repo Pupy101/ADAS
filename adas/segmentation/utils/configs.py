@@ -3,6 +3,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Union
 
+from ..models import ModelSize
+
 CLASS_NAMES = ["main_road", "backgroud"]
 
 
@@ -34,26 +36,36 @@ COEFFICIENTS = {
 
 @dataclass
 class ModelParameters:
-    """Base segmentation model parameters"""
+    """Segmentation model parameters"""
 
     model: ModelType
     in_channels: int
     out_channels: int
-    big: bool
+    size: ModelSize
     max_pool: bool
     bilinear: bool
+
+
+@dataclass
+class DatasetParameters:
+    """Dataset parameters"""
+
+    image_dir: Union[str, Path]
+    mask_dir: Union[str, Path]
+    train_batch_size: int
+    valid_batch_size: int
+    valid_size: float
+
+
+@dataclass
+class TrainingParameters:
+    learning_rate: float
 
 
 @dataclass
 class TrainConfig(AsDictDataclass, ModelParameters):  # pylint: disable=too-many-instance-attributes
     """Config for train segmentation model"""
 
-    # dataset parameters
-    image_dir: Union[str, Path]
-    mask_dir: Union[str, Path]
-    train_batch_size: int
-    valid_batch_size: int
-    valid_size: float
     # training parameters
     learning_rate: float
     seed: int

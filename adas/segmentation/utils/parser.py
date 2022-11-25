@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 
-from adas.segmentation.utils.configs import EvaluationConfig, ModelType, TrainConfig
+from ..models import ModelSize
+from .configs import EvaluationConfig, ModelType, TrainConfig
 
 
 def parse_train_args() -> TrainConfig:
