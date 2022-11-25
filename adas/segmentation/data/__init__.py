@@ -1,2 +1,2 @@
 from .augmentation import create_augmentation
-from .dataset import BDD100KDataset
+from .dataset import BDD100KDataset, ImageClassificationDataset

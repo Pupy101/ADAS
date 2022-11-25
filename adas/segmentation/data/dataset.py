@@ -25,7 +25,7 @@ class ImageAndLabel:
     label: int
 
 
-class MixingDataset(Dataset):  # pylint: disable=abstract-method
+class MixingDataset:  # pylint: disable=too-few-public-methods
     """Mixing class for dataset"""
 
     @staticmethod
@@ -39,16 +39,16 @@ class MixingDataset(Dataset):  # pylint: disable=abstract-method
     ) -> Dict[str, Path]:
         """Create mapping stem of image file and path to it"""
         if extensions is None:
-            extensions = {".png", ".jpg"}
+            extensions = {".png", ".jpg", ".jpeg"}
         directory = Path(directory)
         stem2path: Dict[str, Path] = {}
         for file in directory.rglob("*"):
-            if file.suffix in extensions:
+            if file.suffix.lower() in extensions:
                 stem2path[file.stem] = file
         return stem2path
 
 
-class BDD100KDataset(MixingDataset):
+class BDD100KDataset(Dataset, MixingDataset):
     """
     Dataset for train segmentation net based on BD100K
     https://bair.berkeley.edu/blog/2018/05/30/bdd/
@@ -68,9 +68,10 @@ class BDD100KDataset(MixingDataset):
         """Finding pairs by name and return that pairs from image and mask folder"""
         images = BDD100KDataset._found_stem2path(directory=image_dir, extensions=extensions)
         masks = BDD100KDataset._found_stem2path(directory=mask_dir, extensions=extensions)
-        data: List[ImageAndMask] = []
-        for key in sorted(images.keys() & masks.keys()):
-            data.append(ImageAndMask(image=images[key], mask=masks[key]))
+        data = [
+            ImageAndMask(image=images[key], mask=masks[key])
+            for key in sorted(images.keys() & masks.keys())
+        ]
         return data
 
     def __getitem__(self, ind: int) -> Dict[str, Tensor]:
@@ -80,9 +81,10 @@ class BDD100KDataset(MixingDataset):
         image: Tensor = data["image"]
         mask: Tensor = data["mask"]
 
-        one_hot_mask = torch.zeros(2, mask.size(0), mask.size(1))
+        one_hot_mask = torch.zeros(3, mask.size(0), mask.size(1))
         one_hot_mask[0, mask == 0] = 1  # main road
-        one_hot_mask[1, mask == 2] = 1  # backgroud
+        one_hot_mask[1, mask == 1] = 1  # other roads
+        one_hot_mask[2, mask == 2] = 1  # background
 
         return {"features": image, "targets": one_hot_mask.long()}
 
@@ -90,7 +92,7 @@ class BDD100KDataset(MixingDataset):
         return len(self.data)
 
 
-class ImageClassificationDataset(MixingDataset):
+class ImageClassificationDataset(Dataset, MixingDataset):
     """Image classification dataset"""
 
     def __init__(self, data: List[ImageAndLabel], transforms: Callable) -> None:
@@ -106,10 +108,13 @@ class ImageClassificationDataset(MixingDataset):
         stem2path = ImageClassificationDataset._found_stem2path(
             directory=image_dir, extensions=extensions
         )
-        data: List[ImageAndLabel] = []
-        for stem, path in stem2path.items():
-            label = int(stem.partition("_")[-1])
-            data.append(ImageAndLabel(image=path, label=label))
+        class_dir2label = {
+            _: i for i, _ in enumerate(sorted({p.parent for p in stem2path.values()}))
+        }
+        data = [
+            ImageAndLabel(image=image, label=class_dir2label[image.parent])
+            for image in stem2path.values()
+        ]
         return data
 
     def __getitem__(self, ind: int) -> Dict[str, Tensor]:
