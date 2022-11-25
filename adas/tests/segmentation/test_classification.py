@@ -32,7 +32,7 @@ def test_classificator(
     model = Classificator(
         feature_extractor=feature_extractor, count_classes=count_classes, dropout=dropout
     )
-    input_batch = torch.rand(16, in_channels, 224, 224)
+    input_batch = torch.rand(4, in_channels, 224, 224)
     with torch.no_grad():
         outputs_batch = model(input_batch)
-    assert tuple(outputs_batch.shape) == (16, count_classes)
+    assert tuple(outputs_batch.shape) == (4, count_classes)
