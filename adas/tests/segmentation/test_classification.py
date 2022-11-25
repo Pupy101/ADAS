@@ -22,6 +22,7 @@ def test_classificator(
     count_classes: int,
     dropout: float,
 ):
+    """Testing of classificator with feature extractor - encoder from Unet or U2net model"""
     feature_extractor: Union[UnetEncoder, U2netEncoder]
     if feature_extractor_type is ModelType.UNET:
         feature_extractor = UnetEncoder(in_channels=in_channels, size=size, max_pool=max_pool)

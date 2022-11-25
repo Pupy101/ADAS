@@ -18,6 +18,7 @@ def test_unet(
     bilinear: bool,
     count_predict_masks: int,
 ):
+    """Testing of Unet model forward pass"""
     model = Unet(
         in_channels=in_channels,
         out_channels=out_channels,

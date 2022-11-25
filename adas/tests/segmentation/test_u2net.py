@@ -18,6 +18,7 @@ def test_u2net(
     bilinear: bool,
     count_predict_masks: int,
 ):
+    """Testing of U2net model forward pass"""
     model = U2net(
         in_channels=in_channels,
         out_channels=out_channels,
