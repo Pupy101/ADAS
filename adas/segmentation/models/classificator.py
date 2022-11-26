@@ -3,7 +3,7 @@ from typing import Union
 from torch import Tensor, nn
 
 from .blocks import DWConv2dBNLReLU, ModuleWithDevice
-from .configurations import ModelSize
+from .enums import ModelSize
 from .u2net import U2netEncoder
 from .unet import UnetEncoder
 

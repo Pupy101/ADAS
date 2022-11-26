@@ -4,15 +4,15 @@ import torch
 from torch import Tensor, nn
 
 from .blocks import ModuleWithDevice
-from .configurations import (
+from .configs import (
     DownsampleX2BlockConfig,
     DWConv2dBNLReLUConfig,
     DWConv2dConfig,
     ManyConfigs,
-    ModelSize,
     UpsamplePredictHeadConfig,
     UpsampleX2BlockConfig,
 )
+from .enums import ModelSize
 
 
 class UnetEncoder(ModuleWithDevice):

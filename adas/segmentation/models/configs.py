@@ -1,25 +1,9 @@
 from dataclasses import dataclass, fields
-from enum import Enum
 from typing import List, Optional, Tuple, Type, Union
 
 from torch.nn import Module, Sequential
 
 from .blocks import *  # pylint: disable=unused-wildcard-import,wildcard-import
-
-
-class ModelSize(Enum):
-    """Model sizes"""
-
-    SMALL = "SMALL"
-    MEDIUM = "MEDIUM"
-    BIG = "BIG"
-
-
-class ModelType(Enum):
-    """Acceptable models types"""
-
-    UNET = "UNET"
-    U2NET = "U2NET"
 
 
 @dataclass
