@@ -1,8 +1,7 @@
-from distutils.core import setup
 from pathlib import Path
 from typing import List
 
-from setuptools import find_packages
+from setuptools import find_packages, setup
 
 
 def find_requirements() -> List[str]:
@@ -23,4 +22,12 @@ setup(
     author_email="ser.porkhun41@gmail.com",
     packages=find_packages(),
     install_requires=find_requirements(),
+    entry_points={
+        "console_scripts": [
+            "segmentation-train = adas.segmentation.train:main",
+            "segmentation-eval = adas.segmentation.eval:main",
+            "segmentation-encoder-train = adas.segmentation.train_clf:main",
+            "segmentation-encoder-eval = adas.segmentation.eval_clf:main",
+        ]
+    },
 )

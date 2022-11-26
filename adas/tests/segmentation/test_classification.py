@@ -4,17 +4,16 @@ from typing import Union
 import pytest
 import torch
 
-from adas.segmentation.models import Classificator, ModelSize
+from adas.segmentation.models import Classificator, ModelSize, ModelType
 from adas.segmentation.models.u2net import U2netEncoder
 from adas.segmentation.models.unet import UnetEncoder
-from adas.segmentation.utils.configs import ModelType
 
 
 @pytest.mark.parametrize(
     "feature_extractor_type, in_channels, size, max_pool, count_classes, dropout",
     product(ModelType, [3], ModelSize, [True, False], [3, 100], [0.1, 0.4]),
 )
-def test_classificator(
+def test_classificator(  # pylint: disable=too-many-arguments
     feature_extractor_type: ModelType,
     in_channels: int,
     size: ModelSize,

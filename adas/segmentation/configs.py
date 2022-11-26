@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Union
 
@@ -11,13 +12,16 @@ CLASS_NAMES = ["main_road", "other_roads", "background"]
 class AsDictDataclass:
     """Mixin class for factory method 'asdict'"""
 
+    @staticmethod
+    def _handle_value(value: Any) -> Any:
+        if isinstance(value, Enum):
+            return value.value
+        return value
+
     def asdict(self, exclude: Optional[Iterable[str]] = None) -> Dict[str, Any]:
         """Method for representation dataclass as dict"""
-        dictionary = asdict(self)
-        if exclude is not None:
-            for key in exclude:
-                dictionary.pop(key)
-        return dictionary
+        exclude = exclude or set()
+        return {k: self._handle_value(v) for k, v in asdict(self).items() if k not in exclude}
 
 
 # model
@@ -109,7 +113,7 @@ class TSHyperparameters(BaseHyperparameters):
 class BaseWeight:
     """Model weight for recovery model"""
 
-    resume: Optional[Union[str, Path]]
+    resume: Optional[str]
 
 
 @dataclass
@@ -198,7 +202,7 @@ class TrainSegmentationConfig(  # pylint: disable=too-many-ancestors
         super().__post_init__()
         assert self.count_predict_masks == len(
             self.predicts_coeffs
-        ), "Count coefficients in `--predicts_coeffs` must be equal number of `--count_predict_masks`"
+        ), "Count coefficients in `--predicts_coeffs` must be equal `--count_predict_masks`"
 
 
 @dataclass
@@ -211,3 +215,11 @@ class EvaluationSegmentationConfig(  # pylint: disable=too-many-ancestors
     LoggingParameters,
 ):
     """Config of evaluation segmentation model"""
+
+
+Config = Union[
+    EvaluationEncoderConfig,
+    EvaluationSegmentationConfig,
+    TrainEncoderConfig,
+    TrainSegmentationConfig,
+]

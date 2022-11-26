@@ -1,16 +1,18 @@
 from itertools import product
+from typing import Union
 
 import pytest
 import torch
 
-from adas.segmentation.models import ModelSize, U2net
+from adas.segmentation.models import ModelSize, U2net, Unet
 
 
 @pytest.mark.parametrize(
-    "in_channels, out_channels, size, max_pool, bilinear, count_predict_masks",
-    product([3], [2, 3], ModelSize, [True, False], [True, False], [1, 2, 5]),
+    "model_type, in_channels, out_channels, size, max_pool, bilinear, count_predict_masks",
+    product([Unet, U2net], [3], [2, 3], ModelSize, [True, False], [True, False], [1, 2, 4]),
 )
-def test_u2net(
+def test_unet(  # pylint: disable=too-many-arguments
+    model_type: Union[Unet, U2net],
     in_channels: int,
     out_channels: int,
     size: ModelSize,
@@ -18,8 +20,8 @@ def test_u2net(
     bilinear: bool,
     count_predict_masks: int,
 ):
-    """Testing of U2net model forward pass"""
-    model = U2net(
+    """Testing of Unet model forward pass"""
+    model = model_type(
         in_channels=in_channels,
         out_channels=out_channels,
         size=size,
