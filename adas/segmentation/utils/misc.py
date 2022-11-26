@@ -1,8 +1,10 @@
+from collections import OrderedDict
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from catalyst import dl
 from catalyst.core.callback import Callback
 from catalyst.loggers.wandb import WandbLogger
+from catalyst.utils import load_checkpoint
 from torch import Tensor
 from torch.nn import Module
 from torch.nn import functional as F
@@ -122,3 +124,19 @@ def create_logger(config: Config) -> Optional[Dict[str, Any]]:
     if config.logging:
         return {"wandb": WandbLogger(project="ADAS", name=config.name_run, log_batch_metrics=True)}
     return None
+
+
+def load_encoder_weights(
+    weight: str, model: Module, encoder_name: str = "feature_extractor", mode: str = "runner"
+) -> Module:
+    assert mode in ["runner", "model"]
+    weights = load_checkpoint(weight)
+    model_weight: OrderedDict = weight if mode == "model" else weights["model_state_dict"]
+    encoder_weights = OrderedDict()
+    for k, v in model_weight.items():
+        if not k.startswith(encoder_name + "."):
+            continue
+        new_k = k.replace(encoder_name + ".", "", 1)
+        encoder_weights[new_k] = v
+    model.encoder.load_state_dict(encoder_weights)
+    return model

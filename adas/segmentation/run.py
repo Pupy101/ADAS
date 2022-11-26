@@ -1,5 +1,6 @@
 from catalyst import dl
 from catalyst.contrib.losses import DiceLoss, IoULoss
+from catalyst.utils import load_checkpoint, save_checkpoint
 from torch import nn
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
@@ -18,6 +19,7 @@ from adas.segmentation.utils.misc import (
     create_callbacks,
     create_logger,
     create_model,
+    load_encoder_weights,
 )
 from adas.utils.misc import train_test_split
 
@@ -86,6 +88,8 @@ def run_segmentation(config: Config) -> None:
     """Run segmentation model"""
     assert isinstance(config, (EvaluationSegmentationConfig, TrainSegmentationConfig))
     model = create_model(config)
+    if isinstance(config, TrainSegmentationConfig) and config.resume_encoder:
+        load_encoder_weights(config.resume_encoder, model)
     optimizer = (
         AdamW(model.parameters(), lr=config.learning_rate)
         if isinstance(config, TrainSegmentationConfig)
