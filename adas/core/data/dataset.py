@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional, Set, Union
+from typing import List, Set, Union
 
 import numpy as np
 from PIL import Image
@@ -14,9 +14,6 @@ class MixingDataset:
         return np.array(Image.open(path))
 
     @staticmethod
-    def find_files(
-        directory: Union[str, Path], extensions: Optional[Set[str]] = None
-    ) -> List[Path]:
+    def find_files(directory: Union[str, Path], extensions: Set[str]) -> List[Path]:
         """Find all files with setted extension"""
-        extensions = extensions or {".png", ".jpg", ".jpeg"}
-        return [file for file in Path(directory).rglob("*") if file.suffix in extensions]
+        return [file for file in Path(directory).rglob("*") if file.suffix.lower() in extensions]
