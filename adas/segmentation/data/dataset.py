@@ -5,12 +5,12 @@ import torch
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from adas.core.data.dataset import MixingDataset
+from adas.core.data.dataset import DatasetMixin
 
 from .types import ImageAndMask
 
 
-class BDD100KDataset(Dataset, MixingDataset):
+class BDD100KDataset(Dataset, DatasetMixin):
     """
     Dataset for train segmentation net based on BD100K
     https://bair.berkeley.edu/blog/2018/05/30/bdd/

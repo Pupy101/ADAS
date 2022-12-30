@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 
 
-class MixingDataset:
+class DatasetMixin:
     """Mixing class for dataset"""
 
     @staticmethod
