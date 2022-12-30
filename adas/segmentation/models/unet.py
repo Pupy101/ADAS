@@ -3,68 +3,63 @@ from typing import List, Tuple, Union
 import torch
 from torch import Tensor, nn
 
-from .blocks import ModuleWithDevice
-from .configs import (
-    DownsampleX2BlockConfig,
-    DWConv2dBNLReLUConfig,
-    DWConv2dConfig,
-    ManyConfigs,
-    UpsamplePredictHeadConfig,
-    UpsampleX2BlockConfig,
+from adas.core.models.blocks import (
+    DownsampleX2Block,
+    DWConv2d,
+    DWConv2dBNLReLU,
+    ModuleWithDevice,
+    UpsampleBlock,
+    UpsampleX2Block,
 )
-from .enums import ModelSize
+
+from .types import ModelSize
 
 
 class UnetEncoder(ModuleWithDevice):
-    """Unet decoder"""
+    """Unet encoder"""
 
-    def __init__(self, in_channels: int, size: ModelSize, max_pool: bool) -> None:
+    def __init__(self, in_channels: int, size: str, downsample_mode: str) -> None:
         super().__init__()
         self.size = size
         shapes: Tuple[int, int, int, int]
-        if size is ModelSize.BIG:
+        if size == ModelSize.BIG.value:
             shapes = (64, 128, 256, 512)
-        elif size is ModelSize.MEDIUM:
+        elif size == ModelSize.MEDIUM.value:
             shapes = (32, 64, 128, 256)
-        elif size is ModelSize.SMALL:
+        elif size == ModelSize.SMALL.value:
             shapes = (16, 32, 64, 128)
         else:
-            raise ValueError(f"Strange size for UnetEncoder: {size}")
-        configuration = [
-            ManyConfigs(
-                [
-                    DWConv2dBNLReLUConfig(in_channels=in_channels, out_channels=shapes[0]),
-                    DWConv2dBNLReLUConfig(in_channels=shapes[0], out_channels=shapes[0]),
-                ]
-            ),
-            ManyConfigs(
-                [
-                    DWConv2dBNLReLUConfig(in_channels=shapes[0], out_channels=shapes[1]),
-                    DWConv2dBNLReLUConfig(in_channels=shapes[1], out_channels=shapes[1]),
-                ]
-            ),
-            ManyConfigs(
-                [
-                    DWConv2dBNLReLUConfig(in_channels=shapes[1], out_channels=shapes[2]),
-                    DWConv2dBNLReLUConfig(in_channels=shapes[2], out_channels=shapes[2]),
-                ]
-            ),
-            ManyConfigs(
-                [
-                    DWConv2dBNLReLUConfig(in_channels=shapes[2], out_channels=shapes[3]),
-                    DWConv2dBNLReLUConfig(in_channels=shapes[3], out_channels=shapes[3]),
-                ]
-            ),
-        ]
-        downsample_configuration: List[DownsampleX2BlockConfig] = [
-            DownsampleX2BlockConfig(in_channels=c.configs[-1].out_channels, max_pool=max_pool)
-            for c in configuration
-        ]
-        self.encoder_stages = nn.ModuleList([c.create() for c in configuration])
-        self.downsample_stages = nn.ModuleList([c.create() for c in downsample_configuration])
+            acceptable = [_.value for _ in ModelSize]
+            raise ValueError(f"Strange size for UnetEncoder: {size}. Acceptable: {acceptable}")
+        self.encoder_stages = nn.ModuleList(
+            [
+                nn.Sequential(
+                    DWConv2dBNLReLU(in_channels=in_channels, out_channels=shapes[0]),
+                    DWConv2dBNLReLU(in_channels=shapes[0], out_channels=shapes[0]),
+                ),
+                nn.Sequential(
+                    DWConv2dBNLReLU(in_channels=shapes[0], out_channels=shapes[1]),
+                    DWConv2dBNLReLU(in_channels=shapes[1], out_channels=shapes[1]),
+                ),
+                nn.Sequential(
+                    DWConv2dBNLReLU(in_channels=shapes[1], out_channels=shapes[2]),
+                    DWConv2dBNLReLU(in_channels=shapes[2], out_channels=shapes[2]),
+                ),
+                nn.Sequential(
+                    DWConv2dBNLReLU(in_channels=shapes[2], out_channels=shapes[3]),
+                    DWConv2dBNLReLU(in_channels=shapes[3], out_channels=shapes[3]),
+                ),
+            ]
+        )
+        self.downsample_stages = nn.ModuleList(
+            [
+                DownsampleX2Block(mode=downsample_mode, in_channels=in_channels)
+                for in_channels in shapes
+            ]
+        )
 
     def forward(self, batch: Tensor) -> Tuple[Tensor, List[Tensor]]:
-        """Forward step of module"""
+        """Forward step of UnetEncoder module"""
         encoder_outputs = []
         for encoder_stage, down_stage in zip(self.encoder_stages, self.downsample_stages):
             batch = encoder_stage(batch)
@@ -76,75 +71,69 @@ class UnetEncoder(ModuleWithDevice):
 class UnetBottleneck(ModuleWithDevice):
     """U2net bottleneck"""
 
-    def __init__(self, size: ModelSize) -> None:
+    def __init__(self, size: str) -> None:
         super().__init__()
         shapes: Tuple[int, int, int]
-        if size is ModelSize.BIG:
+        if size == ModelSize.BIG.value:
             shapes = (512, 1024, 512)
-        elif size is ModelSize.MEDIUM:
+        elif size == ModelSize.MEDIUM.value:
             shapes = (256, 512, 256)
-        elif size is ModelSize.SMALL:
+        elif size == ModelSize.SMALL.value:
             shapes = (128, 256, 128)
         else:
-            raise ValueError(f"Strange size for UnetBottleneck: {size}")
-        configuration = ManyConfigs(
-            [
-                DWConv2dBNLReLUConfig(in_channels=shapes[0], out_channels=shapes[1]),
-                DWConv2dBNLReLUConfig(in_channels=shapes[1], out_channels=shapes[2]),
-            ]
+            acceptable = [_.value for _ in ModelSize]
+            raise ValueError(f"Strange size for UnetBottleneck: {size}. Acceptable: {acceptable}")
+        self.bottleneck = nn.Sequential(
+            DWConv2dBNLReLU(in_channels=shapes[0], out_channels=shapes[1]),
+            DWConv2dBNLReLU(in_channels=shapes[1], out_channels=shapes[2]),
         )
-        self.bottleneck = configuration.create()
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
+        """Forward step of UnetBottleneck module"""
         return self.bottleneck(batch)
 
 
 class UnetDecoder(ModuleWithDevice):
     """Unet decoder"""
 
-    def __init__(self, size: ModelSize, bilinear: bool) -> None:
+    def __init__(self, size: str, upsample_mode: str) -> None:
         super().__init__()
         shapes: Tuple[int, int, int, int, int]
-        if size is ModelSize.BIG:
+        if size == ModelSize.BIG.value:
             shapes = (1024, 512, 256, 128, 64)
-        elif size is ModelSize.MEDIUM:
+        elif size == ModelSize.MEDIUM.value:
             shapes = (512, 256, 128, 64, 32)
-        elif size is ModelSize.SMALL:
+        elif size == ModelSize.SMALL.value:
             shapes = (256, 128, 64, 32, 16)
         else:
-            raise ValueError(f"Strange size for UnetDecoder: {size}")
-        configuration = [
-            ManyConfigs(
-                [
-                    DWConv2dBNLReLUConfig(in_channels=shapes[0], out_channels=shapes[1]),
-                    DWConv2dBNLReLUConfig(in_channels=shapes[1], out_channels=shapes[2]),
-                ]
-            ),
-            ManyConfigs(
-                [
-                    DWConv2dBNLReLUConfig(in_channels=shapes[1], out_channels=shapes[2]),
-                    DWConv2dBNLReLUConfig(in_channels=shapes[2], out_channels=shapes[3]),
-                ]
-            ),
-            ManyConfigs(
-                [
-                    DWConv2dBNLReLUConfig(in_channels=shapes[2], out_channels=shapes[3]),
-                    DWConv2dBNLReLUConfig(in_channels=shapes[3], out_channels=shapes[4]),
-                ]
-            ),
-            ManyConfigs(
-                [
-                    DWConv2dBNLReLUConfig(in_channels=shapes[3], out_channels=shapes[4]),
-                    DWConv2dBNLReLUConfig(in_channels=shapes[4], out_channels=shapes[4]),
-                ]
-            ),
-        ]
-        upsample_configuration: List[UpsampleX2BlockConfig] = [
-            UpsampleX2BlockConfig(in_channels=s, bilinear=bilinear) for s in shapes[1:]
-        ]
-        self.upsample_stages = nn.ModuleList([c.create() for c in upsample_configuration])
-        self.decoder_stages = nn.ModuleList([c.create() for c in configuration])
+            acceptable = [_.value for _ in ModelSize]
+            raise ValueError(f"Strange size for UnetDecoder: {size}. Acceptable: {acceptable}")
+        self.decoder_stages = nn.ModuleList(
+            [
+                nn.Sequential(
+                    DWConv2dBNLReLU(in_channels=shapes[0], out_channels=shapes[1]),
+                    DWConv2dBNLReLU(in_channels=shapes[1], out_channels=shapes[2]),
+                ),
+                nn.Sequential(
+                    DWConv2dBNLReLU(in_channels=shapes[1], out_channels=shapes[2]),
+                    DWConv2dBNLReLU(in_channels=shapes[2], out_channels=shapes[3]),
+                ),
+                nn.Sequential(
+                    DWConv2dBNLReLU(in_channels=shapes[2], out_channels=shapes[3]),
+                    DWConv2dBNLReLU(in_channels=shapes[3], out_channels=shapes[4]),
+                ),
+                nn.Sequential(
+                    DWConv2dBNLReLU(in_channels=shapes[3], out_channels=shapes[4]),
+                    DWConv2dBNLReLU(in_channels=shapes[4], out_channels=shapes[4]),
+                ),
+            ]
+        )
+        self.upsample_stages = nn.ModuleList(
+            [
+                UpsampleX2Block(mode=upsample_mode, in_channels=in_channels)
+                for in_channels in shapes[1:]
+            ]
+        )
 
     def forward(self, batch: Tensor, encoder_outputs: List[Tensor]) -> List[Tensor]:
         """Forward step of module"""
@@ -160,45 +149,41 @@ class UnetDecoder(ModuleWithDevice):
 class UnetPredictHeads(ModuleWithDevice):
     """Unet predict heads"""
 
-    def __init__(self, out_channels: int, size: ModelSize, count_predict_masks: int = 5) -> None:
+    def __init__(self, out_channels: int, size: str, count_features: int = 4) -> None:
         super().__init__()
-        assert 0 < count_predict_masks < 5, "Count features from encoder maximum is 4"
-        self.count_predict_masks = count_predict_masks
-        in_channels: Tuple[int, int, int, int]
-        if size is ModelSize.BIG:
-            in_channels = (256, 128, 64, 64)
-        elif size is ModelSize.MEDIUM:
-            in_channels = (128, 64, 32, 32)
-        elif size is ModelSize.SMALL:
-            in_channels = (64, 32, 16, 16)
+        assert 0 < count_features < 5, "Count features from encoder maximum is 4"
+        self.count_features = count_features
+        shapes: Tuple[int, int, int, int]
+        if size == ModelSize.BIG.value:
+            shapes = (256, 128, 64, 64)
+        elif size == ModelSize.MEDIUM.value:
+            shapes = (128, 64, 32, 32)
+        elif size == ModelSize.SMALL.value:
+            shapes = (64, 32, 16, 16)
         else:
-            raise ValueError(f"Strange size for U2netPredictHeads: {size}")
-        configuration: List[Union[UpsamplePredictHeadConfig, DWConv2dConfig]] = [
-            UpsamplePredictHeadConfig(
-                scale_factor=8,
-                in_channels=in_channels[-4],
-                out_channels=out_channels,
+            acceptable = [_.value for _ in ModelSize]
+            raise ValueError(f"Strange size for UnetPredictHeads: {size}. Acceptable: {acceptable}")
+        heads = [
+            nn.Sequential(
+                UpsampleBlock(scale_factor=8),
+                DWConv2d(in_channels=shapes[0], out_channels=out_channels),
             ),
-            UpsamplePredictHeadConfig(
-                scale_factor=4,
-                in_channels=in_channels[-3],
-                out_channels=out_channels,
+            nn.Sequential(
+                UpsampleBlock(scale_factor=4),
+                DWConv2d(in_channels=shapes[1], out_channels=out_channels),
             ),
-            UpsamplePredictHeadConfig(
-                scale_factor=2,
-                in_channels=in_channels[-2],
-                out_channels=out_channels,
+            nn.Sequential(
+                UpsampleBlock(scale_factor=2),
+                DWConv2d(in_channels=shapes[2], out_channels=out_channels),
             ),
-            DWConv2dConfig(in_channels=in_channels[-1], out_channels=out_channels),
+            DWConv2d(in_channels=shapes[3], out_channels=out_channels),
         ]
-        self.heads = nn.ModuleList([c.create() for c in configuration])
+        self.heads = nn.ModuleList(heads[-count_features:])
 
     def forward(self, decoder_outputs: List[Tensor]) -> Tuple[Tensor, ...]:
         """Forward step of module"""
         headers_outputs = []
-        for decoder_batch, clf_head in zip(
-            decoder_outputs[-self.count_predict_masks :], self.heads[-self.count_predict_masks :]
-        ):
+        for decoder_batch, clf_head in zip(decoder_outputs[-self.count_features :], self.heads):
             headers_outputs.append(clf_head(decoder_batch))
         return tuple(headers_outputs)
 
@@ -210,19 +195,21 @@ class Unet(ModuleWithDevice):
         self,
         in_channels: int,
         out_channels: int,
-        size: ModelSize,
-        max_pool: bool,
-        bilinear: bool,
-        count_predict_masks: int,
+        size: str,
+        downsample_mode: str,
+        upsample_mode: str,
+        count_features: int,
     ) -> None:
         """Model init"""
         super().__init__()
 
-        self.encoder = UnetEncoder(in_channels=in_channels, size=size, max_pool=max_pool)
+        self.encoder = UnetEncoder(
+            in_channels=in_channels, size=size, downsample_mode=downsample_mode
+        )
         self.bottleneck = UnetBottleneck(size=size)
-        self.decoder = UnetDecoder(size=size, bilinear=bilinear)
+        self.decoder = UnetDecoder(size=size, upsample_mode=upsample_mode)
         self.heads = UnetPredictHeads(
-            out_channels=out_channels, size=size, count_predict_masks=count_predict_masks
+            out_channels=out_channels, size=size, count_features=count_features
         )
 
     def forward(self, batch: Tensor) -> Tuple[Tensor, ...]:

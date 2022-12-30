@@ -1,11 +1,11 @@
-from adas.segmentation.run import run_segmentation
-from adas.segmentation.utils.parser import parse_evaluation_segmentation_args
+from adas.segmentation.run import run
+from adas.segmentation.utils.parser import parse_eval_args
 
 
 def main():
     """Evaluation segmentation model"""
-    config = parse_evaluation_segmentation_args()
-    run_segmentation(config)
+    config = parse_eval_args()
+    run(config)
 
 
 if __name__ == "__main__":

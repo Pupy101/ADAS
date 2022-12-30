@@ -1,19 +1,14 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from typing import Any, Dict
 
+from adas.core.models.types import DownsampleMode, UpsampleMode
 from adas.utils.misc import find_enum
 
-from ..configs import (
-    EvaluationEncoderConfig,
-    EvaluationSegmentationConfig,
-    ModelType,
-    TrainEncoderConfig,
-    TrainSegmentationConfig,
-)
-from ..models import ModelSize
+from ..config import EvalCfg, TrainCfg
+from ..models.types import ModelSize, ModelType
 
 
-def _add_model_params(parser: ArgumentParser, is_pretraining: bool) -> ArgumentParser:
+def _add_model_params(parser: ArgumentParser) -> ArgumentParser:
     """Add to parser model parameters"""
     parser.add_argument(
         "--model",
@@ -23,66 +18,48 @@ def _add_model_params(parser: ArgumentParser, is_pretraining: bool) -> ArgumentP
         help="Model type (default: %(default)s)",
     )
     parser.add_argument(
-        "--size",
-        choices=[_.value for _ in ModelSize],
-        type=str,
-        default=ModelSize.MEDIUM.value,
-        help="Model size (default: %(default)s)",
-    )
-    parser.add_argument(
         "--in_channels",
         type=int,
         default=3,
         help="Count model input channels (default: %(default)s)",
     )
-    if not is_pretraining:
-        parser.add_argument(
-            "--out_channels",
-            type=int,
-            default=3,
-            help="Count model output channels (default: %(default)s)",
-        )
     parser.add_argument(
-        "--max_pool",
-        action="store_true",
-        default=False,
-        help="Use for downsample max pooling, without \
-flag convolution with stride=2 (default: %(default)s)",
+        "--out_channels",
+        type=int,
+        default=3,
+        help="Count model output channels (default: %(default)s)",
     )
-    if not is_pretraining:
-        parser.add_argument(
-            "--bilinear",
-            action="store_true",
-            default=False,
-            help="Use for upsample bilinear, without flag transpose\
- convolution (default: %(default)s)",
-        )
-        parser.add_argument(
-            "--count_predict_masks",
-            type=int,
-            help="Number of predict masks from different model's layers for training",
-            required=True,
-        )
-    else:
-        parser.add_argument(
-            "--count_classes",
-            "-classes",
-            type=int,
-            help="Count classes in classification dataset",
-            required=True,
-        )
-        parser.add_argument(
-            "--dropout",
-            type=float,
-            default=0.1,
-            help="Dropout probability in classificator (default: %(default)s)",
-        )
+    parser.add_argument(
+        "--size",
+        choices=[_.value for _ in ModelSize],
+        type=str,
+        default=ModelSize.SMALL.value,
+        help="Model size (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--downsample",
+        choices=[_.value for _ in DownsampleMode],
+        type=str,
+        default=DownsampleMode.MAX_POOL.value,
+        help="Downsample mode (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--upsample",
+        choices=[_.value for _ in UpsampleMode],
+        type=str,
+        default=UpsampleMode.BILINEAR.value,
+        help="Upsample mode (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--count_features",
+        type=int,
+        help="Number of predict features maps from model",
+        required=True,
+    )
     return parser
 
 
-def _add_data_params(
-    parser: ArgumentParser, is_pretraining: bool, is_train: bool
-) -> ArgumentParser:
+def _add_data_params(parser: ArgumentParser, is_train: bool) -> ArgumentParser:
     """Add to parser data parameters"""
     parser.add_argument(
         "--image_dir",
@@ -90,13 +67,12 @@ def _add_data_params(
         required=True,
         help="Path to directory with images",
     )
-    if not is_pretraining:
-        parser.add_argument(
-            "--mask_dir",
-            type=str,
-            required=True,
-            help="Path to directory with masks",
-        )
+    parser.add_argument(
+        "--mask_dir",
+        type=str,
+        required=True,
+        help="Path to directory with masks",
+    )
     if is_train:
         parser.add_argument(
             "--train_batch_size",
@@ -120,50 +96,57 @@ def _add_data_params(
     return parser
 
 
-def _add_training_params(parser: ArgumentParser, is_pretraining: bool) -> ArgumentParser:
+def _add_training_params(parser: ArgumentParser, is_train: bool) -> ArgumentParser:
     """Add to parser training parameters"""
-    parser.add_argument(
-        "--learning_rate",
-        "-lr",
-        type=float,
-        default=1e-4,
-        help="Optimizer learning rate (default: %(default)s)",
-    )
-    if not is_pretraining:
+    if is_train:
         parser.add_argument(
-            "--predicts_coeffs",
+            "--learning_rate",
+            "-lr",
             type=float,
-            nargs="*",
-            help="Coefficients for aggregate model predict masks in loss",
-            required=True,
+            default=1e-4,
+            help="Optimizer learning rate (default: %(default)s)",
         )
-    parser.add_argument("--seed", type=int, default=1234, help="Train seed (default: %(default)s)")
     parser.add_argument(
-        "--num_epochs", type=int, default=10, help="Count training epochs (default: %(default)s)"
+        "--predicts_coeffs",
+        type=float,
+        nargs="*",
+        help="Coefficients for aggregate model predict masks in loss",
+        required=True,
     )
-    parser.add_argument(
-        "--num_batch_steps",
-        type=int,
-        default=None,
-        help="Run only n batches from loaders (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--profile",
-        "-p",
-        action="store_true",
-        default=False,
-        help="Profile first validation batch (default: %(default)s)",
-    )
+    if is_train:
+        parser.add_argument(
+            "--seed", type=int, default=1234, help="Train seed (default: %(default)s)"
+        )
+        parser.add_argument(
+            "--num_epochs",
+            type=int,
+            default=10,
+            help="Count training epochs (default: %(default)s)",
+        )
+        parser.add_argument(
+            "--num_batch_steps",
+            type=int,
+            default=None,
+            help="Run only n batches from loaders (default: %(default)s)",
+        )
+        parser.add_argument(
+            "--profile",
+            "-p",
+            action="store_true",
+            default=False,
+            help="Profile first validation batch (default: %(default)s)",
+        )
     return parser
 
 
-def _add_resume_params(
-    parser: ArgumentParser, is_pretraining: bool, is_train: bool
-) -> ArgumentParser:
+def _add_weight_params(parser: ArgumentParser, is_train: bool) -> ArgumentParser:
     parser.add_argument(
-        "--resume", type=str, default=None, help="Resume from checkpoint (default: %(default)s)"
+        "--resume",
+        type=str,
+        default=None,
+        help="Resume from checkpoint (default: %(default)s)",
     )
-    if not is_pretraining and is_train:
+    if is_train:
         parser.add_argument(
             "--resume_encoder",
             type=str,
@@ -176,7 +159,10 @@ def _add_resume_params(
 def _add_engine_params(parser: ArgumentParser) -> ArgumentParser:
     """Add to parser engine parameters"""
     parser.add_argument(
-        "--cpu", action="store_true", default=False, help="Train on cpu (default: %(default)s)"
+        "--cpu",
+        action="store_true",
+        default=False,
+        help="Train on cpu (default: %(default)s)",
     )
     parser.add_argument(
         "--fp16",
@@ -203,8 +189,7 @@ def _add_logging_params(parser: ArgumentParser) -> ArgumentParser:
         help="Verbose training (default: %(default)s)",
     )
     parser.add_argument(
-        "--logging",
-        "-l",
+        "--wandb",
         action="store_true",
         default=False,
         help="Logging in initialized wandb (default: %(default)s)",
@@ -213,49 +198,41 @@ def _add_logging_params(parser: ArgumentParser) -> ArgumentParser:
     return parser
 
 
-def _parse_args(is_pretraining: bool, is_train: bool) -> Dict[str, Any]:
+def _parse_args(args: Namespace) -> Dict[str, Any]:
     """
     Create parser and composite all functions for adding parameters to parser,
         change model type and size and return parameters as dict
     """
-    parser = ArgumentParser()
-    parser = _add_model_params(parser, is_pretraining=is_pretraining)
-    parser = _add_data_params(parser, is_pretraining=is_pretraining, is_train=is_train)
-    if is_train:
-        parser = _add_training_params(parser, is_pretraining=is_pretraining)
-    parser = _add_resume_params(parser, is_pretraining=is_pretraining, is_train=is_train)
-    parser = _add_logging_params(_add_engine_params(parser))
-
-    args = parser.parse_args()
 
     args.model = find_enum(value=args.model, enum_type=ModelType)
     args.size = find_enum(value=args.size, enum_type=ModelSize)
-
-    if args.logging and args.name_run is None:
-        raise ValueError("Please set parameter --name_run for logging to wandb")
-
+    args.downsample = find_enum(value=args.downsample, enum_type=DownsampleMode)
+    args.upsample = find_enum(value=args.upsample, enum_type=UpsampleMode)
     return vars(args)
 
 
-def parse_train_segmentation_args() -> TrainSegmentationConfig:
+def create_parser(is_train: bool) -> ArgumentParser:
+    parser = ArgumentParser()
+    parser = _add_model_params(parser)
+    parser = _add_data_params(parser, is_train=is_train)
+    parser = _add_training_params(parser, is_train=is_train)
+    parser = _add_weight_params(parser, is_train=is_train)
+    parser = _add_engine_params(parser)
+    parser = _add_logging_params(parser)
+    return parser
+
+
+def parse_train_args() -> TrainCfg:
     """Parse train arguments"""
 
-    return TrainSegmentationConfig(**_parse_args(is_pretraining=False, is_train=True))
+    parser = create_parser(is_train=True)
+    args = parser.parse_args()
+    return TrainCfg(**_parse_args(args))
 
 
-def parse_evaluation_segmentation_args() -> EvaluationSegmentationConfig:
+def parse_eval_args() -> EvalCfg:
     """Parse evaluation arguments"""
 
-    return EvaluationSegmentationConfig(**_parse_args(is_pretraining=False, is_train=False))
-
-
-def parse_train_encoder_args() -> TrainEncoderConfig:
-    """Parse pretraining arguments"""
-
-    return TrainEncoderConfig(**_parse_args(is_pretraining=True, is_train=True))
-
-
-def parse_evaluation_encoder_args() -> EvaluationEncoderConfig:
-    """Parse pretraining arguments"""
-
-    return EvaluationEncoderConfig(**_parse_args(is_pretraining=True, is_train=False))
+    parser = create_parser(is_train=False)
+    args = parser.parse_args()
+    return EvalCfg(**_parse_args(args))

@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Type, Union
 
 from catalyst import dl
 from catalyst.core.callback import Callback
@@ -9,17 +9,10 @@ from torch import Tensor
 from torch.nn import Module
 from torch.nn import functional as F
 
-from adas.segmentation.configs import (
-    CLASS_NAMES,
-    Config,
-    EvaluationEncoderConfig,
-    EvaluationSegmentationConfig,
-    TrainEncoderConfig,
-    TrainSegmentationConfig,
-)
-from adas.segmentation.models import Classificator, ModelType, U2net, Unet
-from adas.segmentation.models.u2net import U2netEncoder
-from adas.segmentation.models.unet import UnetEncoder
+from adas.segmentation.config import CLASS_NAMES, Config, TrainCfg
+from adas.segmentation.models.types import ModelType
+from adas.segmentation.models.u2net import U2net
+from adas.segmentation.models.unet import Unet
 
 
 class SegmentationRunner(dl.SupervisedRunner):  # pylint: disable=missing-class-docstring
@@ -31,31 +24,24 @@ class SegmentationRunner(dl.SupervisedRunner):  # pylint: disable=missing-class-
         self.batch = {**batch, **outputs}
 
 
-def create_model(config: Config) -> Module:
+def create_model(config: Config) -> Union[Unet, U2net]:
     """Create model from config"""
-    kwargs: Dict[str, Any] = {
-        "in_channels": config.in_channels,
-        "size": config.size,
-        "max_pool": config.max_pool,
-    }
-    if isinstance(config, (TrainSegmentationConfig, EvaluationSegmentationConfig)):
-        kwargs.update(
-            {
-                "out_channels": config.out_channels,
-                "bilinear": config.bilinear,
-                "count_predict_masks": config.count_predict_masks,
-            }
-        )
-        model = (Unet if config.model is ModelType.UNET else U2net)(**kwargs)
-        return model
-    if isinstance(config, (TrainEncoderConfig, EvaluationEncoderConfig)):
-        extractor = (UnetEncoder if config.model is ModelType.UNET else U2netEncoder)(**kwargs)
-        return Classificator(
-            extractor,  # type: ignore
-            count_classes=config.count_classes,
-            dropout=config.dropout,
-        )
-    raise TypeError(f"Strange config type: {config}")
+
+    model_type: Union[Type[Unet], Type[U2net]]
+    if config.model is ModelType.U2NET:
+        model_type = U2net
+    elif config.model is ModelType.UNET:
+        model_type = Unet
+    else:
+        raise TypeError(f"Strange config type: {config}")
+    return model_type(
+        in_channels=config.in_channels,
+        out_channels=config.out_channels,
+        size=config.size.value,
+        downsample_mode=config.downsample.value,
+        upsample_mode=config.upsample.value,
+        count_features=config.count_features,
+    )
 
 
 def create_callbacks(config: Config) -> List[Callback]:
@@ -70,31 +56,11 @@ def create_callbacks(config: Config) -> List[Callback]:
             mode="runner",
         ),
         dl.EarlyStoppingCallback(loader_key="valid", metric_key="loss", minimize=True, patience=3),
+        dl.CriterionCallback(input_key="probas", target_key="targets", metric_key="loss"),
+        dl.IOUCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES),
+        dl.DiceCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES),
     ]
-    if isinstance(config, (TrainSegmentationConfig, EvaluationSegmentationConfig)):
-        metric_callbacks = [
-            dl.CriterionCallback(input_key="probas", target_key="targets", metric_key="loss"),
-            dl.IOUCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES),
-            dl.DiceCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES),
-        ]
-        callbacks.extend(metric_callbacks)
-    elif isinstance(config, (TrainEncoderConfig, EvaluationEncoderConfig)):
-        metric_callbacks = [
-            dl.AccuracyCallback(
-                input_key="logits",
-                target_key="targets",
-                num_classes=config.count_classes,
-                topk=[1, 5],
-            ),
-            dl.PrecisionRecallF1SupportCallback(
-                input_key="logits",
-                target_key="targets",
-                num_classes=config.count_classes,
-                zero_division=1,
-            ),
-        ]
-        callbacks.extend(metric_callbacks)
-    if isinstance(config, (TrainSegmentationConfig, TrainEncoderConfig)):
+    if isinstance(config, TrainCfg):
         if config.num_batch_steps is not None:
             callbacks.append(
                 dl.CheckRunCallback(
@@ -121,14 +87,20 @@ def create_callbacks(config: Config) -> List[Callback]:
 
 def create_logger(config: Config) -> Optional[Dict[str, Any]]:
     """Create wandb logger or return None"""
-    if config.logging:
+    if config.wandb and config.name_run is None:
+        raise ValueError("Please set parameter --name_run for logging to wandb")
+    if config.wandb:
         return {"wandb": WandbLogger(project="ADAS", name=config.name_run, log_batch_metrics=True)}
     return None
 
 
 def load_encoder_weights(
-    weight: str, model: Module, encoder_name: str = "feature_extractor", mode: str = "runner"
+    weight: str,
+    model: Module,
+    encoder_name: str = "feature_extractor",
+    mode: str = "runner",
 ) -> Module:
+    """Load encoder weights from trained classificator"""
     assert mode in ["runner", "model"]
     weights = load_checkpoint(weight)
     model_weight: OrderedDict = weight if mode == "model" else weights["model_state_dict"]
@@ -138,5 +110,5 @@ def load_encoder_weights(
             continue
         new_k = k.replace(encoder_name + ".", "", 1)
         encoder_weights[new_k] = v
-    model.encoder.load_state_dict(encoder_weights)
+    model.encoder.load_state_dict(encoder_weights)  # type: ignore
     return model

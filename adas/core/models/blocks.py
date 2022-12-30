@@ -1,7 +1,9 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import torch
 from torch import Tensor, nn
+
+from .types import DownsampleMode, UpsampleMode
 
 
 class ModuleWithDevice(nn.Module):  # pylint: disable=abstract-method
@@ -13,7 +15,7 @@ class ModuleWithDevice(nn.Module):  # pylint: disable=abstract-method
         return next(self.parameters()).device
 
 
-class DWConv2d(nn.Module):
+class DWConv2d(ModuleWithDevice):
     """DepthWise convolution"""
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -25,7 +27,7 @@ class DWConv2d(nn.Module):
         padding: int = 1,
         dilation: int = 1,
     ) -> None:
-        """Block init"""
+        """DWConv2d block init"""
         super().__init__()
         self.dw_conv = nn.Sequential(
             nn.Conv2d(
@@ -46,11 +48,11 @@ class DWConv2d(nn.Module):
         )
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
+        """Forward step of DWConv2d block"""
         return self.dw_conv(batch)
 
 
-class DWConvT2d(nn.Module):
+class DWConvT2d(ModuleWithDevice):
     """DepthWise transpose convolution"""
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -63,7 +65,7 @@ class DWConvT2d(nn.Module):
         output_padding: int = 0,
         dilation: int = 1,
     ) -> None:
-        """Block init"""
+        """DWConvT2d block init"""
         super().__init__()
         self.dw_t_conv = nn.Sequential(
             nn.ConvTranspose2d(
@@ -85,11 +87,11 @@ class DWConvT2d(nn.Module):
         )
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
+        """Forward step of DWConvT2d block"""
         return self.dw_t_conv(batch)
 
 
-class DWConv2dBNLReLU(nn.Module):
+class DWConv2dBNLReLU(ModuleWithDevice):
     """DepthWise convolution with BatchNorm2d and LeakyReLU activation"""
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -102,9 +104,9 @@ class DWConv2dBNLReLU(nn.Module):
         dilation: int = 1,
         negative_slope: float = 0.05,
     ) -> None:
-        """Block init"""
+        """DWConv2dBNLReLU block init"""
         super().__init__()
-        self.conv2d = DWConv2d(
+        self.dw_conv = DWConv2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
@@ -116,11 +118,11 @@ class DWConv2dBNLReLU(nn.Module):
         self.activation = nn.LeakyReLU(negative_slope=negative_slope)
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
-        return self.activation(self.batch_norm(self.conv2d(batch)))
+        """Forward step of DWConv2dBNLReLU block"""
+        return self.activation(self.batch_norm(self.dw_conv(batch)))
 
 
-class DWConvT2dBNLReLU(nn.Module):
+class DWConvT2dBNLReLU(ModuleWithDevice):
     """DepthWise transpose convolution with BatchNorm2d and LeakyReLU activation"""
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -134,7 +136,7 @@ class DWConvT2dBNLReLU(nn.Module):
         dilation: int = 1,
         negative_slope: float = 0.05,
     ) -> None:
-        """Block init"""
+        """DWConvT2dBNLReLU block init"""
         super().__init__()
         self.dw_t_conv = DWConvT2d(
             in_channels=in_channels,
@@ -149,70 +151,72 @@ class DWConvT2dBNLReLU(nn.Module):
         self.activation = nn.LeakyReLU(negative_slope=negative_slope)
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
+        """Forward step of DWConvT2dBNLReLU block"""
         return self.activation(self.batch_norm(self.dw_t_conv(batch)))
 
 
-class UpsampleX2Block(nn.Module):
+class UpsampleX2Block(ModuleWithDevice):
     """
     Upsample block with idea from
     https://github.com/milesial/Pytorch-UNet/blob/67bf11b4db4c5f2891bd7e8e7f58bcde8ee2d2db/unet/unet_parts.py#L42
     """
 
-    def __init__(self, in_channels: int, bilinear: bool = True) -> None:
-        """Block init"""
+    def __init__(self, mode: str, in_channels: int) -> None:
+        """UpsampleX2Block block init"""
         super().__init__()
-        self.upsample_block: nn.Module  # for mypy
-        if bilinear:
-            self.upsample_block = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
+        self.upsamplex2: Union[nn.Upsample, DWConvT2dBNLReLU]
+        if mode == UpsampleMode.BILINEAR.value:
+            self.upsamplex2 = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
+        elif mode == UpsampleMode.TRANSPOSE_CONVOLUTION.value:
+            self.upsamplex2 = DWConvT2dBNLReLU(in_channels=in_channels, out_channels=in_channels)
         else:
-            self.upsample_block = DWConvT2dBNLReLU(
-                in_channels=in_channels, out_channels=in_channels
-            )
+            acceptable = [repr(_.value) for _ in UpsampleMode]
+            raise ValueError(f"Strange upsample mode: {repr(mode)}. Acceptable: {acceptable}")
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
-        return self.upsample_block(batch)
+        """Forward step of UpsampleX2Block block"""
+        return self.upsamplex2(batch)
 
 
-class UpsampleBlock(nn.Module):
+class UpsampleBlock(ModuleWithDevice):
     """
     Upsample block with idea from
     https://github.com/milesial/Pytorch-UNet/blob/67bf11b4db4c5f2891bd7e8e7f58bcde8ee2d2db/unet/unet_parts.py#L42
     """
 
     def __init__(self, scale_factor: int) -> None:
-        """Block init"""
+        """UpsampleBlock block init"""
         super().__init__()
-        self.upsample_block = nn.Upsample(
-            scale_factor=scale_factor, mode="bilinear", align_corners=True
-        )
+        self.upsample = nn.Upsample(scale_factor=scale_factor, mode="bilinear", align_corners=True)
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
-        return self.upsample_block(batch)
+        """Forward step of UpsampleBlock block"""
+        return self.upsample(batch)
 
 
-class DownsampleX2Block(nn.Module):
+class DownsampleX2Block(ModuleWithDevice):
     """Downsample block with max pooling or convolution with stride = 2"""
 
-    def __init__(self, in_channels: int, max_pool: bool = True) -> None:
-        """Block init"""
+    def __init__(self, mode: str, in_channels: int) -> None:
+        """DownsampleX2Block block init"""
         super().__init__()
-        self.downsample_block: nn.Module  # for mypy
-        if max_pool:
-            self.downsample_block = nn.MaxPool2d(kernel_size=2, stride=2)
-        else:
-            self.downsample_block = DWConv2dBNLReLU(
+        self.downsample: nn.Module  # for mypy
+        if mode == DownsampleMode.MAX_POOL.value:
+            self.downsample = nn.MaxPool2d(kernel_size=2, stride=2)
+        elif mode == DownsampleMode.CONVOLUTION.value:
+            self.downsample = DWConv2dBNLReLU(
                 in_channels=in_channels, out_channels=in_channels, stride=2
             )
+        else:
+            acceptable = [repr(_.value) for _ in DownsampleMode]
+            raise ValueError(f"Strange downsample mode: {repr(mode)}. Acceptable: {acceptable}")
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
-        return self.downsample_block(batch)
+        """Forward step of DownsampleX2Block block"""
+        return self.downsample(batch)
 
 
-class RSUD1(nn.Module):  # pylint: disable=too-many-instance-attributes
+class RSUD1(ModuleWithDevice):  # pylint: disable=too-many-instance-attributes
     """
     This block is stage en_(1-4) and de_(1-4) in U2Net from https://arxiv.org/pdf/2005.09007.pdf
     RSU block with one dilated convolution
@@ -228,14 +232,14 @@ class RSUD1(nn.Module):  # pylint: disable=too-many-instance-attributes
         dilation: int = 2,
         pad_dilation: int = 2,
         depth: int = 5,
-        max_pool: bool = True,
-        bilinear: bool = True,
+        downsample_mode: str = DownsampleMode.MAX_POOL.value,
+        upsample_mode: str = UpsampleMode.BILINEAR.value,
     ) -> None:
-        """Block init"""
+        """RSUD1 block init"""
         super().__init__()
         if mid_channels is None:
-            mid_channels = out_channels
-        assert depth >= 1, "Depth of RSU unit must be bigger or equal 3"
+            mid_channels = out_channels // 2
+        assert depth >= 1, "Depth of RSU unit must be bigger or equal 1"
         # 2 preprocessing conv
         self.preprocess_conv_stage_1 = DWConv2dBNLReLU(
             in_channels=in_channels,
@@ -254,8 +258,8 @@ class RSUD1(nn.Module):  # pylint: disable=too-many-instance-attributes
             [
                 nn.Sequential(
                     DownsampleX2Block(
+                        mode=downsample_mode,
                         in_channels=mid_channels,
-                        max_pool=max_pool,
                     ),
                     DWConv2dBNLReLU(
                         in_channels=mid_channels,
@@ -284,8 +288,8 @@ class RSUD1(nn.Module):  # pylint: disable=too-many-instance-attributes
         self.decoder_upsample_stages = nn.ModuleList(
             [
                 UpsampleX2Block(
+                    mode=upsample_mode,
                     in_channels=mid_channels,
-                    bilinear=bilinear,
                 )
                 for _ in range(depth - 1)
             ]
@@ -303,8 +307,8 @@ class RSUD1(nn.Module):  # pylint: disable=too-many-instance-attributes
         )
         # last decoder upsample & conv stage
         self.post_upsample_stage = UpsampleX2Block(
+            mode=upsample_mode,
             in_channels=mid_channels,
-            bilinear=bilinear,
         )
         self.post_conv_stage = DWConv2dBNLReLU(
             in_channels=mid_channels * 2,
@@ -314,7 +318,7 @@ class RSUD1(nn.Module):  # pylint: disable=too-many-instance-attributes
         )
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
+        """Forward step of RSUD1 block"""
         preprocess_batch_stage_1 = self.preprocess_conv_stage_1(batch)
         preprocess_batch_stage_2 = self.preprocess_conv_stage_2(preprocess_batch_stage_1)
         downsample_batches, current_batch = [], preprocess_batch_stage_2
@@ -334,12 +338,15 @@ class RSUD1(nn.Module):  # pylint: disable=too-many-instance-attributes
             )
 
         current_batch = self.post_conv_stage(
-            torch.cat([self.post_upsample_stage(current_batch), preprocess_batch_stage_2], dim=1)
+            torch.cat(
+                [self.post_upsample_stage(current_batch), preprocess_batch_stage_2],
+                dim=1,
+            )
         )
         return current_batch + preprocess_batch_stage_1
 
 
-class RSUD5(nn.Module):  # pylint: disable=too-many-instance-attributes
+class RSUD5(ModuleWithDevice):  # pylint: disable=too-many-instance-attributes
     """
     Part of U2Net with structure similar vanilla UNet.
     This NN is stage en_5, en_6 and de_5 in U2Net
@@ -355,12 +362,12 @@ class RSUD5(nn.Module):  # pylint: disable=too-many-instance-attributes
         dilations: Tuple[int, int, int, int, int] = (2, 4, 8, 4, 2),
         pad_dilations: Tuple[int, int, int, int, int] = (2, 4, 8, 4, 2),
     ) -> None:
-        """Block init"""
+        """RSUD5 block init"""
         super().__init__()
         assert len(dilations) == 5
         assert len(pad_dilations) == 5
         if mid_channels is None:
-            mid_channels = out_channels
+            mid_channels = out_channels // 2
         self.preprocess_conv_stage_1 = DWConv2dBNLReLU(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -373,36 +380,40 @@ class RSUD5(nn.Module):  # pylint: disable=too-many-instance-attributes
             kernel_size=kernel_size,
             padding=padding,
         )
-        dil_kwargs = {"out_channels": mid_channels, "kernel_size": kernel_size}
         self.dilation_stage_1 = DWConv2dBNLReLU(
             in_channels=mid_channels,
+            out_channels=mid_channels,
+            kernel_size=kernel_size,
             padding=pad_dilations[0],
             dilation=dilations[0],
-            **dil_kwargs,
         )
         self.dilation_stage_2 = DWConv2dBNLReLU(
             in_channels=mid_channels,
+            out_channels=mid_channels,
+            kernel_size=kernel_size,
             padding=pad_dilations[1],
             dilation=dilations[1],
-            **dil_kwargs,
         )
         self.dilation_stage_3 = DWConv2dBNLReLU(
             in_channels=mid_channels,
+            out_channels=mid_channels,
+            kernel_size=kernel_size,
             padding=pad_dilations[2],
             dilation=dilations[2],
-            **dil_kwargs,
         )
         self.dilation_stage_4 = DWConv2dBNLReLU(
             in_channels=mid_channels * 2,
+            out_channels=mid_channels,
+            kernel_size=kernel_size,
             padding=pad_dilations[3],
             dilation=dilations[3],
-            **dil_kwargs,
         )
         self.dilation_stage_5 = DWConv2dBNLReLU(
             in_channels=mid_channels * 2,
+            out_channels=mid_channels,
+            kernel_size=kernel_size,
             padding=pad_dilations[4],
             dilation=dilations[4],
-            **dil_kwargs,
         )
         self.postprocessing_stage = DWConv2dBNLReLU(
             in_channels=mid_channels * 2,
@@ -412,7 +423,7 @@ class RSUD5(nn.Module):  # pylint: disable=too-many-instance-attributes
         )
 
     def forward(self, batch: Tensor) -> Tensor:
-        """Forward step of module"""
+        """Forward step of RSUD5 block"""
         preprocessed_batch_1 = self.preprocess_conv_stage_1(batch)
         preprocessed_batch_2 = self.preprocess_conv_stage_2(preprocessed_batch_1)
         dil_out_1 = self.dilation_stage_1(preprocessed_batch_2)
@@ -424,16 +435,3 @@ class RSUD5(nn.Module):  # pylint: disable=too-many-instance-attributes
             torch.cat([preprocessed_batch_2, dil_out_5], dim=1)
         )
         return post_process_batch + preprocessed_batch_1
-
-
-__all__ = [
-    "DWConv2d",
-    "DWConv2dBNLReLU",
-    "DWConvT2d",
-    "DWConvT2dBNLReLU",
-    "UpsampleX2Block",
-    "UpsampleBlock",
-    "DownsampleX2Block",
-    "RSUD1",
-    "RSUD5",
-]

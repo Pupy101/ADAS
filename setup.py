@@ -26,8 +26,6 @@ setup(
         "console_scripts": [
             "segmentation-train = adas.segmentation.train:main",
             "segmentation-eval = adas.segmentation.eval:main",
-            "segmentation-encoder-clf-train = adas.segmentation.train_clf:main",
-            "segmentation-encoder-clf-eval = adas.segmentation.eval_clf:main",
         ]
     },
 )

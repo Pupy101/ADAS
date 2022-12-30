@@ -5,3 +5,5 @@ ignored-modules=torch,numpy
 [MASTER]
 disable=
     C0114, # missing-module-docstring
+[BASIC]
+good-names=k,v
