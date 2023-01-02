@@ -4,8 +4,7 @@ from torch.utils.data import DataLoader
 
 from adas.core.data.augmentation import create_image_augmentation
 from adas.core.data.types import DatasetType
-from adas.core.utils.misc import create_logger
-from adas.utils.misc import train_test_split
+from adas.core.utils.misc import create_logger, train_test_split
 
 from .config import Config, TrainCfg
 from .data.dataset import BDD100KDataset

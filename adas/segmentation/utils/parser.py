@@ -2,8 +2,8 @@ from argparse import ArgumentParser, Namespace
 from typing import Any, Dict
 
 from adas.core.models.types import DownsampleMode, UpsampleMode
+from adas.core.utils.misc import find_enum
 from adas.core.utils.parser import add_engine_params, add_hyper_params, add_logging_params
-from adas.utils.misc import find_enum
 
 from ..config import EvalCfg, TrainCfg
 from ..models.types import ModelSize, ModelType
