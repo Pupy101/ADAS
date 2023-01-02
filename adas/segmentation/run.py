@@ -1,5 +1,5 @@
 from catalyst.contrib.losses import DiceLoss, IoULoss
-from torch.optim import AdamW
+from catalyst.contrib.optimizers import AdamP
 from torch.utils.data import DataLoader
 
 from adas.core.data.augmentation import create_image_augmentation
@@ -23,13 +23,10 @@ def run(config: Config) -> None:
     if isinstance(config, TrainCfg) and config.resume_encoder:
         load_encoder_weights(str(config.resume_encoder), model)
     optimizer = (
-        AdamW(model.parameters(), lr=config.learning_rate) if isinstance(config, TrainCfg) else None
+        AdamP(model.parameters(), lr=config.learning_rate) if isinstance(config, TrainCfg) else None
     )
     criterion = ManyOutputsLoss(
-        losses=(
-            IoULoss(class_dim=config.out_channels),
-            DiceLoss(class_dim=config.out_channels),
-        ),
+        losses=(IoULoss(class_dim=config.out_channels), DiceLoss(class_dim=config.out_channels)),
         coefficients=tuple(config.predicts_coeffs),
         losses_coefficients=(0.6, 0.4),
     )
