@@ -1,4 +1,5 @@
-from catalyst.contrib.losses import DiceLoss, IoULoss
+from catalyst import dl
+from catalyst.contrib.losses import FocalLossMultiClass
 from catalyst.contrib.optimizers import AdamP
 from torch.utils.data import DataLoader
 
@@ -8,39 +9,33 @@ from adas.core.utils.misc import create_logger
 from adas.utils.misc import train_test_split
 
 from .config import Config, TrainCfg
-from .data.dataset import BDD100KDataset
-from .utils.loss import ManyOutputsLoss
-from .utils.misc import SegmentationRunner, create_callbacks, create_model, load_encoder_weights
+from .data.dataset import ImageClassificationDataset
+from .utils.misc import create_callbacks, create_model
 
 
 def run(config: Config) -> None:
     """Run segmentation model"""
     model = create_model(config)
-    if isinstance(config, TrainCfg) and config.resume_encoder:
-        load_encoder_weights(str(config.resume_encoder), model)
     optimizer = (
         AdamP(model.parameters(), lr=config.learning_rate) if isinstance(config, TrainCfg) else None
     )
-    criterion = ManyOutputsLoss(
-        losses=(IoULoss(class_dim=config.out_channels), DiceLoss(class_dim=config.out_channels)),
-        coefficients=tuple(config.predicts_coeffs),
-        losses_coefficients=(0.6, 0.4),
-    )
+    criterion = FocalLossMultiClass()
     callbacks = create_callbacks(config)
     logger = create_logger(config)
     if isinstance(config, TrainCfg):
         train_data, valid_data = train_test_split(
-            data=BDD100KDataset.found_dataset_data(
-                image_dir=config.image_dir, mask_dir=config.mask_dir
-            ),
+            data=ImageClassificationDataset.found_dataset_data_from_dir(data_dir=config.data_dir),
             test_size=config.valid_size,
             seed=config.seed,
         )
-        train_dataset = BDD100KDataset(
+        print("-" * 100)
+        print(len(train_data), len(valid_data))
+        print("-" * 100)
+        train_dataset = ImageClassificationDataset(
             data=train_data,
             transforms=create_image_augmentation(dataset_type=DatasetType.TRAIN.value),
         )
-        valid_dataset = BDD100KDataset(
+        valid_dataset = ImageClassificationDataset(
             data=valid_data,
             transforms=create_image_augmentation(dataset_type=DatasetType.VALID.value),
         )
@@ -51,11 +46,9 @@ def run(config: Config) -> None:
         seed = config.seed
         num_epochs = config.num_epochs
     else:
-        eval_data = BDD100KDataset.found_dataset_data(
-            image_dir=config.image_dir, mask_dir=config.mask_dir
-        )
+        eval_data = ImageClassificationDataset.found_dataset_data_from_dir(data_dir=config.data_dir)
 
-        eval_dataset = BDD100KDataset(
+        eval_dataset = ImageClassificationDataset(
             data=eval_data,
             transforms=create_image_augmentation(dataset_type=DatasetType.VALID.value),
         )
@@ -65,7 +58,7 @@ def run(config: Config) -> None:
         seed = 1
         num_epochs = 1
 
-    SegmentationRunner().train(
+    dl.SupervisedRunner().train(
         model=model,
         optimizer=optimizer,
         criterion=criterion,

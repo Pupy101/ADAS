@@ -1,7 +1,7 @@
 from argparse import ArgumentParser, Namespace
 from typing import Any, Dict
 
-from adas.core.models.types import DownsampleMode, UpsampleMode
+from adas.core.models.types import DownsampleMode
 from adas.core.utils.parser import add_engine_params, add_hyper_params, add_logging_params
 from adas.utils.misc import find_enum
 
@@ -16,7 +16,7 @@ def add_model_params(parser: ArgumentParser) -> ArgumentParser:
         "--model",
         choices=[_.value for _ in ModelType],
         type=str,
-        default=ModelType.UNET.value,
+        default=ModelType.UNET_ENCODER.value,
         help="Model type (default: %(default)s)",
     )
     parser.add_argument(
@@ -24,12 +24,6 @@ def add_model_params(parser: ArgumentParser) -> ArgumentParser:
         type=int,
         default=3,
         help="Count model input channels (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--out_channels",
-        type=int,
-        default=3,
-        help="Count model output channels (default: %(default)s)",
     )
     parser.add_argument(
         "--size",
@@ -46,17 +40,10 @@ def add_model_params(parser: ArgumentParser) -> ArgumentParser:
         help="Downsample mode (default: %(default)s)",
     )
     parser.add_argument(
-        "--upsample",
-        choices=[_.value for _ in UpsampleMode],
-        type=str,
-        default=UpsampleMode.BILINEAR.value,
-        help="Upsample mode (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--count_features",
+        "--classes",
         type=int,
-        help="Number of predict features maps from model",
-        required=True,
+        default=1000,
+        help="Count of predictable classes (default: %(default)s)",
     )
     return parser
 
@@ -65,16 +52,10 @@ def add_data_params(parser: ArgumentParser, is_train: bool) -> ArgumentParser:
     """Add to parser data parameters"""
 
     parser.add_argument(
-        "--image_dir",
+        "--data_dir",
         type=str,
         required=True,
         help="Path to directory with images",
-    )
-    parser.add_argument(
-        "--mask_dir",
-        type=str,
-        required=True,
-        help="Path to directory with masks",
     )
     if is_train:
         parser.add_argument(
@@ -99,22 +80,7 @@ def add_data_params(parser: ArgumentParser, is_train: bool) -> ArgumentParser:
     return parser
 
 
-def add_training_params(parser: ArgumentParser, is_train: bool) -> ArgumentParser:
-    """Add to parser training parameters"""
-
-    parser.add_argument(
-        "--predicts_coeffs",
-        type=float,
-        nargs="*",
-        help="Coefficients for aggregate model predict masks in loss",
-        required=True,
-    )
-    if is_train:
-        parser = add_hyper_params(parser=parser)
-    return parser
-
-
-def add_weight_params(parser: ArgumentParser, is_train: bool) -> ArgumentParser:
+def add_weight_params(parser: ArgumentParser) -> ArgumentParser:
     """Add to parser weights parameters"""
 
     parser.add_argument(
@@ -123,13 +89,6 @@ def add_weight_params(parser: ArgumentParser, is_train: bool) -> ArgumentParser:
         default=None,
         help="Resume from checkpoint (default: %(default)s)",
     )
-    if is_train:
-        parser.add_argument(
-            "--resume_encoder",
-            type=str,
-            default=None,
-            help="Resume from checkpoint segmentation encoder (default: %(default)s)",
-        )
     return parser
 
 
@@ -139,8 +98,9 @@ def create_parser(is_train: bool) -> ArgumentParser:
     parser = ArgumentParser()
     parser = add_model_params(parser)
     parser = add_data_params(parser, is_train=is_train)
-    parser = add_training_params(parser, is_train=is_train)
-    parser = add_weight_params(parser, is_train=is_train)
+    if is_train:
+        parser = add_hyper_params(parser)
+    parser = add_weight_params(parser)
     parser = add_engine_params(parser)
     parser = add_logging_params(parser)
     return parser
@@ -155,7 +115,6 @@ def parse_args(args: Namespace) -> Dict[str, Any]:
     args.model = find_enum(value=args.model, enum_type=ModelType)
     args.size = find_enum(value=args.size, enum_type=ModelSize)
     args.downsample = find_enum(value=args.downsample, enum_type=DownsampleMode)
-    args.upsample = find_enum(value=args.upsample, enum_type=UpsampleMode)
     return vars(args)
 
 

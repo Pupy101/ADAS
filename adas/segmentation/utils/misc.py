@@ -1,18 +1,19 @@
 from collections import OrderedDict
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Type, Union
+from typing import Any, List, Mapping, Tuple, Type, Union
 
 from catalyst import dl
 from catalyst.core.callback import Callback
-from catalyst.loggers.wandb import WandbLogger
 from catalyst.utils import load_checkpoint
 from torch import Tensor
 from torch.nn import Module
 from torch.nn import functional as F
 
-from adas.segmentation.config import CLASS_NAMES, Config, TrainCfg
-from adas.segmentation.models.types import ModelType
-from adas.segmentation.models.u2net import U2net
-from adas.segmentation.models.unet import Unet
+from adas.core.utils.misc import create_callbacks as create_base_callbacks
+
+from ..config import CLASS_NAMES, Config
+from ..models.types import ModelType
+from ..models.u2net import U2net
+from ..models.unet import Unet
 
 
 class SegmentationRunner(dl.SupervisedRunner):  # pylint: disable=missing-class-docstring
@@ -46,52 +47,15 @@ def create_model(config: Config) -> Union[Unet, U2net]:
 
 def create_callbacks(config: Config) -> List[Callback]:
     """Create callback for catalyst runner"""
-    callbacks: List[Callback] = [
-        dl.CheckpointCallback(
-            logdir=config.logdir,
-            loader_key="valid",
-            metric_key="loss",
-            topk=3,
-            resume_model=config.resume,
-            mode="runner",
-        ),
-        dl.EarlyStoppingCallback(loader_key="valid", metric_key="loss", minimize=True, patience=3),
+    callbacks = create_base_callbacks(config=config)
+    segmentation_callbacks = [
         dl.CriterionCallback(input_key="probas", target_key="targets", metric_key="loss"),
         dl.IOUCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES),
         dl.DiceCallback(input_key="last_probas", target_key="targets", class_names=CLASS_NAMES),
     ]
-    if isinstance(config, TrainCfg):
-        if config.num_batch_steps is not None:
-            callbacks.append(
-                dl.CheckRunCallback(
-                    num_batch_steps=config.num_batch_steps,
-                    num_epoch_steps=config.num_epochs,
-                )
-            )
-        if config.profile:
-            callbacks.append(
-                dl.ProfilerCallback(
-                    loader_key="train",
-                    num_batches=10,
-                    profiler_kwargs={
-                        "record_shapes": True,
-                        "profile_memory": True,
-                        "with_flops": True,
-                        "with_modules": True,
-                    },
-                )
-            )
+    callbacks.extend(segmentation_callbacks)
 
     return callbacks
-
-
-def create_logger(config: Config) -> Optional[Dict[str, Any]]:
-    """Create wandb logger or return None"""
-    if config.wandb and config.name_run is None:
-        raise ValueError("Please set parameter --name_run for logging to wandb")
-    if config.wandb:
-        return {"wandb": WandbLogger(project="ADAS", name=config.name_run, log_batch_metrics=True)}
-    return None
 
 
 def load_encoder_weights(
