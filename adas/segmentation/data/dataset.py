@@ -12,7 +12,7 @@ from .types import ImageAndMask
 
 class BDD100KDataset(Dataset, DatasetMixin):
     """
-    Dataset for train segmentation net based on BD100K
+    Dataset for train segmentation based on BD100K
     https://bair.berkeley.edu/blog/2018/05/30/bdd/
     """
 
@@ -22,24 +22,6 @@ class BDD100KDataset(Dataset, DatasetMixin):
         """Dataset init"""
         self.data = data
         self.transforms = transforms
-
-    @staticmethod
-    def found_dataset_data(
-        image_dir: Union[str, Path],
-        mask_dir: Union[str, Path],
-        extensions: Optional[Set[str]] = None,
-    ) -> List[ImageAndMask]:
-        """Finding pairs by name and return that pairs from image and mask folder"""
-        extensions = extensions or BDD100KDataset.EXTENSIONS
-        images = BDD100KDataset.find_files(directory=image_dir, extensions=extensions)
-        masks = BDD100KDataset.find_files(directory=mask_dir, extensions=extensions)
-        stem2image: Dict[str, Path] = {_.stem: _ for _ in images}
-        stem2mask: Dict[str, Path] = {_.stem: _ for _ in masks}
-        data = [
-            ImageAndMask(image=stem2image[key], mask=stem2mask[key])
-            for key in sorted(stem2image.keys() & stem2mask.keys())
-        ]
-        return data
 
     def __getitem__(self, ind: int) -> Dict[str, Tensor]:
         pair = self.data[ind]
@@ -55,5 +37,23 @@ class BDD100KDataset(Dataset, DatasetMixin):
 
         return {"features": image, "targets": one_hot_mask}
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
+
+    @staticmethod
+    def found_dataset_data(
+        image_dir: Union[str, Path],
+        mask_dir: Union[str, Path],
+        extensions: Optional[Set[str]] = None,
+    ) -> List[ImageAndMask]:
+        """Found pairs by name and return that pairs from image and mask folder"""
+        extensions = extensions or BDD100KDataset.EXTENSIONS
+        images = BDD100KDataset.find_files(directory=image_dir, extensions=extensions)
+        masks = BDD100KDataset.find_files(directory=mask_dir, extensions=extensions)
+        stem2image: Dict[str, Path] = {_.stem: _ for _ in images}
+        stem2mask: Dict[str, Path] = {_.stem: _ for _ in masks}
+        data = [
+            ImageAndMask(image=stem2image[key], mask=stem2mask[key])
+            for key in sorted(stem2image.keys() & stem2mask.keys())
+        ]
+        return data
