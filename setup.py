@@ -16,7 +16,7 @@ def find_requirements() -> List[str]:
 
 setup(
     name="adas",
-    version="0.1",
+    version="0.2",
     description="ADAS",
     author="Sergei Porkhun",
     author_email="ser.porkhun41@gmail.com",
@@ -24,6 +24,8 @@ setup(
     install_requires=find_requirements(),
     entry_points={
         "console_scripts": [
+            "classification-train = adas.classification.train:main",
+            "classification-eval = adas.classification.eval:main",
             "segmentation-train = adas.segmentation.train:main",
             "segmentation-eval = adas.segmentation.eval:main",
         ]
