@@ -22,10 +22,12 @@ def create_image_augmentation(
             A.RandomCrop(height=224, width=224, always_apply=True),
         ]
         augmentation_transforms = augmentation_transforms or [
+            A.Blur(p=0.3),
+            A.CoarseDropout(max_height=16, max_width=16, p=0.3),
             A.HorizontalFlip(p=0.5),
             A.HueSaturationValue(p=0.3),
             A.RandomBrightnessContrast(p=0.3),
-            A.RGBShift(p=0.3),
+            A.RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.3),
         ]
     elif dataset_type in [DatasetType.VALID.value, DatasetType.TEST.value]:
         crop_transforms = crop_transforms or [
@@ -34,9 +36,9 @@ def create_image_augmentation(
         ]
         augmentation_transforms = augmentation_transforms or []
     else:
-        acceptable_types = [repr(_.value) for _ in DatasetType]
+        acceptable_types = [_.value for _ in DatasetType]
         raise ValueError(
-            f"Strange dataset_type: {repr(dataset_type)}. Acceptable types: {acceptable_types}"
+            f"Strange dataset_type: '{dataset_type}'. Acceptable types: {acceptable_types}"
         )
     normalize_transform = normalize_transform or [A.Normalize()]
     to_tensor_transform = to_tensor_transform or [ToTensorV2()]
